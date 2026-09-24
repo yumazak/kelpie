@@ -1,5 +1,14 @@
-import { useState } from "react";
+import { createContext, useContext, useMemo, useState } from "react";
 import { EllipsisVertical } from "lucide-react";
+import {
+  AssistantRuntimeProvider,
+  ThreadListItemPrimitive,
+  ThreadListPrimitive,
+  useAuiState,
+  useExternalStoreRuntime,
+  type ExternalStoreThreadData,
+  type ThreadMessageLike,
+} from "@assistant-ui/react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +29,20 @@ type Tab = "recent" | "all";
 /** "Recently worked on": updated within the last day. */
 const RECENT_MS = 24 * 60 * 60 * 1000;
 
+/** The display data a row needs, carried on each thread's `custom`. */
+type Row = {
+  directory: string;
+  agent?: string;
+  updated?: number;
+  active?: boolean;
+  outcome?: string;
+  /** Timestamp of the last idle transition, when there is one. */
+  idle?: number;
+};
+
+/** Opens the row menu for the session with this id. */
+const MoreContext = createContext<(id: string) => void>(() => {});
+
 function basename(path?: string): string {
   if (!path) return "(unknown)";
   const parts = path.replace(/\/+$/, "").split("/");
@@ -35,12 +58,29 @@ function relative(ms?: number): string {
   return `${Math.round(seconds / 86400)}d`;
 }
 
-function statusColor(session: OcSession): string {
-  if (session.active) return "animate-pulse bg-sky-400";
-  if (session.outcome === "failed") return "bg-red-500";
-  if (session.outcome === "interrupted") return "bg-amber-400";
-  if (session.time?.idle) return "bg-emerald-500";
+function dotClass(row: Partial<Row>): string {
+  if (row.active) return "animate-pulse bg-sky-400";
+  if (row.outcome === "failed") return "bg-red-500";
+  if (row.outcome === "interrupted") return "bg-amber-400";
+  if (row.idle) return "bg-emerald-500";
   return "bg-amber-400";
+}
+
+/** A session as an assistant-ui thread list entry. */
+function toThread(session: OcSession): ExternalStoreThreadData<"regular"> {
+  return {
+    status: "regular",
+    id: session.id,
+    title: session.title || session.id,
+    custom: {
+      directory: session.location?.directory ?? "",
+      agent: session.agent,
+      updated: session.time?.updated,
+      active: session.active === true,
+      outcome: session.outcome,
+      idle: session.time?.idle,
+    } satisfies Row as unknown as Record<string, unknown>,
+  };
 }
 
 /** Every session, grouped by the directory it ran in, behind two tabs. */
@@ -100,6 +140,9 @@ export function Home({
     }
   };
 
+  const openMenu = (id: string) =>
+    setPendingDelete(state.sessions.find((session) => session.id === id) ?? null);
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-5">
       <header className="mb-4 flex items-center justify-between">
@@ -122,60 +165,17 @@ export function Home({
         />
       </div>
 
-      {ordered.length === 0 && (
+      {ordered.length === 0 ? (
         <div className="py-16 text-center text-sm text-muted-foreground">
           {tab === "recent"
             ? "24時間以内のセッションはありません"
             : "セッションがありません"}
         </div>
+      ) : (
+        <MoreContext.Provider value={openMenu}>
+          <HomeThreadList groups={ordered} onSelect={onSelect} />
+        </MoreContext.Provider>
       )}
-
-      {ordered.map(([directory, sessions]) => (
-        <section key={directory} className="mb-6">
-          <h2 className="mb-2 truncate text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            {basename(directory)}
-          </h2>
-          <div className="flex flex-col gap-1">
-            {sessions.map((session) => (
-              <div
-                key={session.id}
-                className="flex items-center gap-1 rounded-xl hover:bg-accent"
-              >
-                <button
-                  type="button"
-                  onClick={() => onSelect(session)}
-                  className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-left"
-                >
-                  <span
-                    className={cn(
-                      "size-2 shrink-0 rounded-full",
-                      statusColor(session),
-                    )}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm">
-                      {session.title || session.id}
-                    </span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {[session.agent, relative(session.time?.updated)]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  aria-label="セッションの操作"
-                  onClick={() => setPendingDelete(session)}
-                  className="mr-1 rounded-lg p-2 text-muted-foreground hover:bg-background hover:text-foreground"
-                >
-                  <EllipsisVertical className="size-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </section>
-      ))}
 
       <Dialog
         open={pendingDelete !== null}
@@ -206,6 +206,102 @@ export function Home({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/**
+ * assistant-ui's thread list, grouped by directory. The runtime carries only
+ * the list — the messages live in the chat's own runtime — so switching a
+ * thread just navigates.
+ */
+function HomeThreadList({
+  groups,
+  onSelect,
+}: {
+  groups: Array<[string, OcSession[]]>;
+  onSelect: (session: OcSession) => void;
+}) {
+  const { threads, indexOf, byId } = useMemo(() => {
+    const threads: ExternalStoreThreadData<"regular">[] = [];
+    const indexOf = new Map<string, number>();
+    const byId = new Map<string, OcSession>();
+    for (const [, sessions] of groups) {
+      for (const session of sessions) {
+        indexOf.set(session.id, threads.length);
+        byId.set(session.id, session);
+        threads.push(toThread(session));
+      }
+    }
+    return { threads, indexOf, byId };
+  }, [groups]);
+
+  const runtime = useExternalStoreRuntime<ThreadMessageLike>({
+    messages: [],
+    convertMessage: (message) => message,
+    onNew: async () => {},
+    adapters: {
+      threadList: {
+        threads,
+        onSwitchToThread: (id) => {
+          const session = byId.get(id);
+          if (session) onSelect(session);
+        },
+      },
+    },
+  });
+
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      <ThreadListPrimitive.Root className="flex flex-col">
+        {groups.map(([directory, sessions]) => (
+          <section key={directory} className="mb-6">
+            <h2 className="mb-2 truncate text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              {basename(directory)}
+            </h2>
+            <div className="flex flex-col gap-1">
+              {sessions.map((session) => (
+                <ThreadListPrimitive.ItemByIndex
+                  key={session.id}
+                  index={indexOf.get(session.id) ?? 0}
+                  components={{ ThreadListItem: KelpieThreadListItem }}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
+      </ThreadListPrimitive.Root>
+    </AssistantRuntimeProvider>
+  );
+}
+
+/** One session row, rendered by assistant-ui's thread list item primitives. */
+function KelpieThreadListItem() {
+  const item = useAuiState((state) => state.threadListItem);
+  const openMenu = useContext(MoreContext);
+  const row = (item.custom ?? {}) as Partial<Row>;
+
+  return (
+    <ThreadListItemPrimitive.Root className="flex items-center gap-1 rounded-xl hover:bg-accent">
+      <ThreadListItemPrimitive.Trigger className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-left">
+        <span className={cn("size-2 shrink-0 rounded-full", dotClass(row))} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm">
+            <ThreadListItemPrimitive.Title fallback={item.id} />
+          </span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {[row.agent, relative(row.updated)].filter(Boolean).join(" · ")}
+          </span>
+        </span>
+      </ThreadListItemPrimitive.Trigger>
+      <button
+        type="button"
+        aria-label="セッションの操作"
+        onClick={() => openMenu(item.id)}
+        className="mr-1 rounded-lg p-2 text-muted-foreground hover:bg-background hover:text-foreground"
+      >
+        <EllipsisVertical className="size-4" />
+      </button>
+    </ThreadListItemPrimitive.Root>
   );
 }
 
