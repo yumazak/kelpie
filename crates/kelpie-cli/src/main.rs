@@ -5,6 +5,7 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 use clap::{Parser, Subcommand};
@@ -74,6 +75,8 @@ enum ServiceCommand {
     },
     /// Stop and remove the agent.
     Uninstall,
+    /// Restart the agent (after installing a new binary).
+    Restart,
     /// Show whether the agent is installed and loaded.
     Status,
 }
@@ -94,6 +97,7 @@ async fn main() -> Result<()> {
         Command::Service { command } => match command {
             ServiceCommand::Install { port, binary } => service::install(port, binary),
             ServiceCommand::Uninstall => service::uninstall(),
+            ServiceCommand::Restart => service::restart(),
             ServiceCommand::Status => service::status(),
         },
     }
@@ -101,10 +105,52 @@ async fn main() -> Result<()> {
 
 async fn cmd_serve(port: u16, static_dir: Option<PathBuf>) -> Result<()> {
     init_tracing();
+    watch_binary_for_restart();
     let state = AppState::new();
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     kelpie::api::serve(state, addr, static_dir).await?;
     Ok(())
+}
+
+/// When the service is installed, a `mise install` swaps the binary on disk
+/// while this process keeps running the old one. Watch the path the service
+/// was installed for, and exit when it changes: launchd's KeepAlive starts the
+/// new binary. Only runs when the plist set `KELPIE_AUTO_RESTART`, so a manual
+/// `kelpie serve` is never killed out from under the operator.
+fn watch_binary_for_restart() {
+    if std::env::var("KELPIE_AUTO_RESTART").as_deref() != Ok("1") {
+        return;
+    }
+    let Some(path) = std::env::var_os("KELPIE_BINARY_PATH").map(PathBuf::from) else {
+        return;
+    };
+    let installed = fingerprint(&path);
+    if installed.is_none() {
+        return;
+    }
+    tokio::spawn(async move {
+        let secs = std::env::var("KELPIE_RESTART_CHECK_SECS")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(300u64)
+            .max(1);
+        let mut ticker = tokio::time::interval(Duration::from_secs(secs));
+        ticker.tick().await;
+        loop {
+            ticker.tick().await;
+            if fingerprint(&path) != installed {
+                tracing::info!("binary changed; exiting so the service restarts");
+                std::process::exit(0);
+            }
+        }
+    });
+}
+
+/// Size + mtime, or `None` when the path cannot be read.
+fn fingerprint(path: &std::path::Path) -> Option<(u64, Option<std::time::SystemTime>)> {
+    std::fs::metadata(path)
+        .ok()
+        .map(|meta| (meta.len(), meta.modified().ok()))
 }
 
 async fn cmd_sessions(limit: u32) -> Result<()> {

@@ -57,11 +57,14 @@ kelpie service uninstall
 
 ```bash
 kelpie service install --port 7180
+kelpie service restart
 kelpie service status
 ```
 
 - `~/Library/LaunchAgents/dev.kelpie.serve.plist` を書き、`launchctl bootstrap` で登録します
 - **ログイン時に自動起動**、落ちても launchd が再起動（KeepAlive）
+- **更新はゼロタッチ**: plist がバイナリを監視し、変わったら自分で再起動します（既定5分ごと、`KELPIE_RESTART_CHECK_SECS` で変更可）。`mise install` だけで最新に追従します
+- 明示的に入れ替えたいときは `kelpie service restart`
 - ログ: `~/.local/state/kelpie/serve.log`
 - `launchd` は環境が最小なので、plist に `PATH`（mise shims / Homebrew）を埋め込みます
 - mise で入れた場合は `latest` シンボリックリンクを指すので、`mise upgrade` に追従します

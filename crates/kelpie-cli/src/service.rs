@@ -54,6 +54,25 @@ pub fn install(port: u16, binary: Option<PathBuf>) -> Result<()> {
     Ok(())
 }
 
+/// Restart the agent so it picks up a newly installed binary. The plist path
+/// is stable (`…/latest/kelpie`), so an update is a restart, never a
+/// re-registration.
+pub fn restart() -> Result<()> {
+    let domain = domain()?;
+    let output = Command::new("launchctl")
+        .args(["kickstart", "-k", &format!("{domain}/{LABEL}")])
+        .output()
+        .context("running launchctl kickstart")?;
+    if !output.status.success() {
+        bail!(
+            "launchctl kickstart failed: {}\n(is it installed? `kelpie service install`)",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    println!("restarted {LABEL}");
+    Ok(())
+}
+
 pub fn uninstall() -> Result<()> {
     let plist = plist_path()?;
     let domain = domain()?;
@@ -185,6 +204,10 @@ fn plist_xml(binary: &Path, port: u16, log: &Path) -> String {
   <dict>
     <key>PATH</key>
     <string>{path}</string>
+    <key>KELPIE_AUTO_RESTART</key>
+    <string>1</string>
+    <key>KELPIE_BINARY_PATH</key>
+    <string>{binary}</string>
   </dict>
 </dict>
 </plist>
