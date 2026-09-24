@@ -25,7 +25,13 @@ const TIMEOUT: Duration = Duration::from_secs(15);
 pub struct OpencodeClient {
     base_url: String,
     password: Option<String>,
+    /// The ordinary client: every call is bounded by `TIMEOUT`.
     http: reqwest::Client,
+    /// A second client with no total timeout, for the long-lived SSE stream.
+    /// reqwest's timeout is a *whole-response* budget, so sharing the bounded
+    /// client severed `/api/event` every 15 seconds and left a gap in which an
+    /// event — and any notification it deserved — could be lost.
+    events_http: reqwest::Client,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -53,10 +59,16 @@ impl OpencodeClient {
         password: Option<String>,
     ) -> Result<Self, OpencodeError> {
         let http = reqwest::Client::builder().timeout(TIMEOUT).build()?;
+        // No total timeout: the SSE stream lives as long as the service does.
+        // TCP keepalive still surfaces a half-open socket.
+        let events_http = reqwest::Client::builder()
+            .tcp_keepalive(Duration::from_secs(30))
+            .build()?;
         Ok(Self {
             base_url: base_url.into().trim_end_matches('/').to_string(),
             password,
             http,
+            events_http,
         })
     }
 
@@ -64,14 +76,23 @@ impl OpencodeClient {
         &self.base_url
     }
 
-    fn request(&self, method: reqwest::Method, path: &str) -> reqwest::RequestBuilder {
+    fn request_with(
+        &self,
+        http: &reqwest::Client,
+        method: reqwest::Method,
+        path: &str,
+    ) -> reqwest::RequestBuilder {
         let url = format!("{}{}", self.base_url, path);
-        let mut request = self.http.request(method, url);
+        let mut request = http.request(method, url);
         // The username is fixed; only the password is per-install.
         if let Some(password) = &self.password {
             request = request.basic_auth("opencode", Some(password));
         }
         request
+    }
+
+    fn request(&self, method: reqwest::Method, path: &str) -> reqwest::RequestBuilder {
+        self.request_with(&self.http, method, path)
     }
 
     async fn json(
@@ -197,9 +218,12 @@ impl OpencodeClient {
     }
 
     /// The service's global event stream (SSE). Read it with `bytes_stream()`.
+    ///
+    /// Sent on the untimed `events_http` client: the stream is long-lived, so
+    /// the bounded `http` client would cut it off at `TIMEOUT`.
     pub async fn events(&self) -> Result<reqwest::Response, OpencodeError> {
         let response = self
-            .request(reqwest::Method::GET, "/api/event")
+            .request_with(&self.events_http, reqwest::Method::GET, "/api/event")
             .send()
             .await?;
         if !response.status().is_success() {
