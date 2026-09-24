@@ -14,7 +14,10 @@ import { cn } from "@/lib/utils";
 import { deleteSession } from "../api";
 import type { OcSession, OcSessionsResponse } from "../types";
 
-type Tab = "active" | "all";
+type Tab = "recent" | "all";
+
+/** "Recently worked on": updated within the last day. */
+const RECENT_MS = 24 * 60 * 60 * 1000;
 
 function basename(path?: string): string {
   if (!path) return "(unknown)";
@@ -51,7 +54,7 @@ export function Home({
   onSelect: (session: OcSession) => void;
   onRefresh: () => Promise<void>;
 }) {
-  const [tab, setTab] = useState<Tab>("all");
+  const [tab, setTab] = useState<Tab>("recent");
   const [pendingDelete, setPendingDelete] = useState<OcSession | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -62,8 +65,14 @@ export function Home({
     return <div className="p-6 text-sm text-muted-foreground">接続中…</div>;
   }
 
-  const running = state.sessions.filter((session) => session.active);
-  const shown = tab === "active" ? running : state.sessions;
+  // The list re-renders on every poll, so reading the clock here is what keeps
+  // "recent" current.
+  // eslint-disable-next-line react/purity
+  const cutoff = Date.now() - RECENT_MS;
+  const recent = state.sessions.filter(
+    (session) => (session.time?.updated ?? 0) > cutoff,
+  );
+  const shown = tab === "recent" ? recent : state.sessions;
 
   const groups = new Map<string, OcSession[]>();
   for (const session of shown) {
@@ -99,10 +108,10 @@ export function Home({
 
       <div className="mb-4 flex gap-1 rounded-xl bg-muted/50 p-1 text-sm">
         <TabButton
-          active={tab === "active"}
-          onClick={() => setTab("active")}
-          label="実行中"
-          count={running.length}
+          active={tab === "recent"}
+          onClick={() => setTab("recent")}
+          label="最近"
+          count={recent.length}
         />
         <TabButton
           active={tab === "all"}
@@ -114,7 +123,9 @@ export function Home({
 
       {ordered.length === 0 && (
         <div className="py-16 text-center text-sm text-muted-foreground">
-          {tab === "active" ? "実行中のセッションはありません" : "セッションがありません"}
+          {tab === "recent"
+            ? "24時間以内のセッションはありません"
+            : "セッションがありません"}
         </div>
       )}
 
