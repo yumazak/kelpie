@@ -33,16 +33,25 @@ export function fetchMessages(sessionId: string): Promise<OcMessagesResponse> {
   );
 }
 
-/** Send a prompt to a session. */export async function sendPrompt(
+/** An opencode `FileAttachment`: a `file://` or `data:` URI. */
+export interface PromptFile {
+  uri: string;
+  name?: string;
+  description?: string;
+}
+
+/** Send a prompt to a session, with optional attachments. */
+export async function sendPrompt(
   sessionId: string,
   text: string,
+  files: PromptFile[] = [],
 ): Promise<void> {
   const response = await fetch(
     `/api/sessions/${encodeURIComponent(sessionId)}/prompt`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify(files.length > 0 ? { text, files } : { text }),
     },
   );
   if (response.ok) return;

@@ -301,6 +301,9 @@ async fn oc_delete_session(
 #[derive(Debug, Deserialize)]
 struct PromptBody {
     text: String,
+    /// opencode `FileAttachment`s (`{ uri, name? }`).
+    #[serde(default)]
+    files: Vec<serde_json::Value>,
 }
 
 async fn oc_prompt(
@@ -310,7 +313,10 @@ async fn oc_prompt(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let client = state.opencode().await?;
     Ok(Json(
-        client.prompt(&id, &body.text).await.map_err(oc_error)?,
+        client
+            .prompt(&id, &body.text, &body.files)
+            .await
+            .map_err(oc_error)?,
     ))
 }
 

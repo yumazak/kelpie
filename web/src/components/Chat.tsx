@@ -7,6 +7,7 @@ import {
   fetchMessages,
   fetchPermissions,
   sendPrompt,
+  type PromptFile,
 } from "../api";
 import { useLiveMessage } from "../hooks/useLiveMessage";
 import { toThreadMessages } from "../lib/convert";
@@ -111,16 +112,22 @@ export function Chat({
   const { live, running } = useLiveMessage(session.id, reload, refreshDock);
 
   const handleNew = useCallback(
-    async (text: string) => {
+    async (text: string, files: PromptFile[]) => {
       // Show the message at once, before the round trip lands.
+      const body = text || "（添付）";
       const local: ThreadMessageLike = {
         id: `local-${Date.now()}`,
         role: "user",
-        content: [{ type: "text", text }],
+        content: [
+          {
+            type: "text",
+            text: files.length > 0 ? `${body}\n📎 ${files.length}件` : body,
+          },
+        ],
       };
       setOptimistic(local);
       try {
-        await sendPrompt(session.id, text);
+        await sendPrompt(session.id, text, files);
       } catch (sendError) {
         setOptimistic(null);
         throw sendError;

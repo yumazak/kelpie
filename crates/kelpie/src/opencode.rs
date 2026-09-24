@@ -165,12 +165,23 @@ impl OpencodeClient {
             .map(str::to_string)
     }
 
-    /// Send a prompt to a session.
-    pub async fn prompt(&self, session_id: &str, text: &str) -> Result<Value, OpencodeError> {
+    /// Send a prompt to a session. `files` are opencode `FileAttachment`s:
+    /// `{ uri, name?, description? }`, where `uri` is a `file://` URL or a
+    /// `data:` URL.
+    pub async fn prompt(
+        &self,
+        session_id: &str,
+        text: &str,
+        files: &[Value],
+    ) -> Result<Value, OpencodeError> {
+        let mut body = serde_json::json!({ "text": text });
+        if !files.is_empty() {
+            body["files"] = Value::Array(files.to_vec());
+        }
         self.json(
             reqwest::Method::POST,
             &format!("/api/session/{session_id}/prompt"),
-            Some(serde_json::json!({ "text": text })),
+            Some(body),
         )
         .await
     }

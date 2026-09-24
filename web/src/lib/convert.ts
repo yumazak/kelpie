@@ -48,6 +48,18 @@ function toolSummary(input: unknown): string {
 
 export { toolSummary };
 
+/** The names of a user message's attachments, for a one-line note. */
+function fileNames(files: unknown): string[] {
+  if (!Array.isArray(files)) return [];
+  return files
+    .map((file) =>
+      file && typeof file === "object" && "name" in file
+        ? String((file as { name?: unknown }).name ?? "")
+        : "",
+    )
+    .filter(Boolean);
+}
+
 export function toThreadMessages(messages: OcMessage[]): ThreadMessageLike[] {
   const out: ThreadMessageLike[] = [];
 
@@ -58,12 +70,21 @@ export function toThreadMessages(messages: OcMessage[]): ThreadMessageLike[] {
 
     if (message.type === "user") {
       const text = typeof message.text === "string" ? message.text : "";
-      if (!text.trim()) return;
+      const content: Part[] = [];
+      if (text.trim()) content.push({ type: "text", text });
+      const names = fileNames(message.files);
+      if (names.length > 0) {
+        content.push({
+          type: "text",
+          text: names.map((name) => `📎 ${name}`).join("\n"),
+        });
+      }
+      if (content.length === 0) return;
       out.push({
         id: `u-${message.id ?? index}`,
         role: "user",
         createdAt,
-        content: [{ type: "text", text }],
+        content,
       });
       return;
     }
