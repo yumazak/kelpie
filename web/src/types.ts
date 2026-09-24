@@ -81,6 +81,13 @@ export interface OcPermission {
   message?: string;
 }
 
+/** A condition that controls whether a form field is shown. */
+export interface OcFormWhen {
+  key: string;
+  op: "eq" | "neq";
+  value: string | number | boolean;
+}
+
 /** One field of a form. */
 export interface OcFormField {
   key: string;
@@ -88,6 +95,7 @@ export interface OcFormField {
   description?: string;
   required?: boolean;
   hidden?: boolean;
+  when?: OcFormWhen[];
   type: string;
   options?: Array<{ value?: string; label?: string }>;
 }

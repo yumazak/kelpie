@@ -2,10 +2,42 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { replyForm, replyPermission } from "../api";
-import type { OcForm, OcFormField, OcPermission } from "../types";
+import type { OcForm, OcFormField, OcFormWhen, OcPermission } from "../types";
 
 // opencode's own blocking prompts, answered from the phone: a permission
 // request becomes allow / always / reject, and a form becomes its fields.
+
+/** A form answer value, before it is coerced for the reply. */
+type FormValue = string | boolean | string[];
+
+/** The current value of a field; an unchecked boolean reads as `false`. */
+function valueOf(
+  key: string,
+  fields: OcFormField[],
+  values: Record<string, FormValue>,
+): unknown {
+  const target = fields.find((field) => field.key === key);
+  if (target?.type === "boolean") return values[key] === true;
+  return values[key];
+}
+
+function matches(actual: unknown, expected: OcFormWhen["value"]): boolean {
+  if (typeof expected === "number") return Number(actual) === expected;
+  return actual === expected;
+}
+
+/** Whether a field is shown: not `hidden`, and every `when` condition met. */
+function isVisible(
+  field: OcFormField,
+  fields: OcFormField[],
+  values: Record<string, FormValue>,
+): boolean {
+  if (field.hidden) return false;
+  return (field.when ?? []).every((condition) => {
+    const met = matches(valueOf(condition.key, fields, values), condition.value);
+    return condition.op === "eq" ? met : !met;
+  });
+}
 
 function FormField({
   field,
@@ -13,8 +45,8 @@ function FormField({
   onChange,
 }: {
   field: OcFormField;
-  value: string | boolean | string[];
-  onChange: (next: string | boolean | string[]) => void;
+  value: FormValue;
+  onChange: (next: FormValue) => void;
 }) {
   if (field.type === "boolean") {
     return (
@@ -72,11 +104,11 @@ function FormField({
 
 function buildAnswer(
   fields: OcFormField[],
-  values: Record<string, string | boolean | string[]>,
+  values: Record<string, FormValue>,
 ): Record<string, unknown> {
   const answer: Record<string, unknown> = {};
   for (const field of fields) {
-    if (field.hidden) continue;
+    if (!isVisible(field, fields, values)) continue;
     const value = values[field.key];
     if (value === undefined || value === "") continue;
     if (field.type === "number" || field.type === "integer") {
@@ -101,9 +133,7 @@ export function HarnessDock({
   onReplied: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
-  const [values, setValues] = useState<
-    Record<string, string | boolean | string[]>
-  >({});
+  const [values, setValues] = useState<Record<string, FormValue>>({});
 
   if (permissions.length === 0 && forms.length === 0) return null;
 
@@ -185,7 +215,7 @@ export function HarnessDock({
           )}
           <div className="flex flex-col gap-2">
             {form.fields
-              .filter((field) => !field.hidden)
+              .filter((field) => isVisible(field, form.fields, values))
               .map((field) => (
                 <div key={field.key}>
                   {field.type !== "boolean" && field.title && (
