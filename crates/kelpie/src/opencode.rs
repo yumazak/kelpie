@@ -109,14 +109,24 @@ impl OpencodeClient {
         .await
     }
 
-    /// One session's messages (oldest first).
+    /// One session's messages, oldest first.
+    ///
+    /// The service caps `limit` at 200 and pages from the END of the log, so
+    /// asking ascending returns the OLDEST 200 and silently drops every newer
+    /// turn. Fetch descending (the newest 200) and reverse, so a reload always
+    /// lands on the live end of the conversation.
     pub async fn messages(&self, session_id: &str, limit: u32) -> Result<Value, OpencodeError> {
-        self.json(
-            reqwest::Method::GET,
-            &format!("/api/session/{session_id}/message?limit={limit}&order=asc"),
-            None,
-        )
-        .await
+        let mut value = self
+            .json(
+                reqwest::Method::GET,
+                &format!("/api/session/{session_id}/message?limit={limit}&order=desc"),
+                None,
+            )
+            .await?;
+        if let Some(data) = value.get_mut("data").and_then(|data| data.as_array_mut()) {
+            data.reverse();
+        }
+        Ok(value)
     }
 
     /// The directory a session ran in, when the service reports one. Used to
