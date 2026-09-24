@@ -13,6 +13,8 @@ use tracing_subscriber::EnvFilter;
 use kelpie::push::{self, Notification, PushStore};
 use kelpie::{AppState, OpencodeClient};
 
+mod service;
+
 #[derive(Parser)]
 #[command(
     name = "kelpie",
@@ -53,6 +55,27 @@ enum Command {
     PushTest,
     /// Check the environment: the opencode service and the push store.
     Doctor,
+    /// Keep the bridge running as a per-user service.
+    Service {
+        #[command(subcommand)]
+        command: ServiceCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum ServiceCommand {
+    /// Install and start a per-user LaunchAgent (macOS).
+    Install {
+        #[arg(long, default_value_t = 7180)]
+        port: u16,
+        /// Binary to run (defaults to this executable, through mise's `latest`).
+        #[arg(long)]
+        binary: Option<PathBuf>,
+    },
+    /// Stop and remove the agent.
+    Uninstall,
+    /// Show whether the agent is installed and loaded.
+    Status,
 }
 
 #[tokio::main]
@@ -68,6 +91,11 @@ async fn main() -> Result<()> {
         } => cmd_messages(session, limit, json).await,
         Command::PushTest => cmd_push_test().await,
         Command::Doctor => cmd_doctor().await,
+        Command::Service { command } => match command {
+            ServiceCommand::Install { port, binary } => service::install(port, binary),
+            ServiceCommand::Uninstall => service::uninstall(),
+            ServiceCommand::Status => service::status(),
+        },
     }
 }
 
