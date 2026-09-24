@@ -38,7 +38,12 @@ export function useLiveMessage(
         setLive(null);
         return;
       }
-      setLive({ id: "live", role: "assistant", content });
+      setLive({
+        id: "live",
+        role: "assistant",
+        status: { type: "running" },
+        content,
+      });
     };
 
     const append = (key: string, kind: LivePart["kind"], delta: string) => {

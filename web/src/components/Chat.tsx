@@ -16,11 +16,22 @@ import type { OcForm, OcPermission, OcSession } from "../types";
 import { ErrorState } from "./ErrorState";
 import { HarnessDock } from "./HarnessDock";
 import { RuntimeProvider } from "./RuntimeProvider";
-import { Button } from "@/components/ui/button";
 
 /** Fallback poll: the live event stream is primary, but a missed event (a
  *  reconnect, a dropped frame) is healed here within a couple of seconds. */
 const POLL_MS = 2000;
+
+/**
+ * An empty assistant message marked as running. assistant-ui's `GroupedParts`
+ * turns this into its own "thinking" indicator (a pulsing dot) before the first
+ * token lands.
+ */
+const THINKING: ThreadMessageLike = {
+  id: "live",
+  role: "assistant",
+  status: { type: "running" },
+  content: [],
+};
 
 function signature(messages: ThreadMessageLike[]): string {
   if (messages.length === 0) return "0";
@@ -148,12 +159,16 @@ export function Chat({
     void reload();
   }, [session.id, reload]);
 
+  const isRunning = running || session.active === true;
   const rendered = [
     ...messages,
     ...(optimistic ? [optimistic] : []),
-    ...(live ? [live] : []),
+    ...(live ? [live] : isRunning ? [THINKING] : []),
   ];
 
+  // The running indicator and the stop button are assistant-ui's own (the
+  // `indicator` part and the composer's cancel action); the dock is only for
+  // permissions and forms.
   const dock =
     permissions.length > 0 || forms.length > 0 ? (
       <HarnessDock
@@ -161,11 +176,6 @@ export function Chat({
         permissions={permissions}
         forms={forms}
         onReplied={refreshDock}
-      />
-    ) : running || session.active ? (
-      <StopBar
-        label={live ? "実行中…" : "考え中…"}
-        onStop={() => void handleStop()}
       />
     ) : undefined;
 
@@ -196,7 +206,12 @@ export function Chat({
         {loading && <ChatSkeleton />}
         {error && <ErrorState detail={error} onRetry={() => void reload()} />}
         {!loading && !error && (
-          <RuntimeProvider messages={rendered} onNew={handleNew}>
+          <RuntimeProvider
+            messages={rendered}
+            isRunning={isRunning}
+            onNew={handleNew}
+            onCancel={handleStop}
+          >
             <Thread components={{ Welcome }} dock={dock} />
           </RuntimeProvider>
         )}
@@ -210,19 +225,6 @@ function Welcome() {
   return (
     <div className="mb-6 px-2 text-sm text-muted-foreground">
       メッセージを送って会話を始めましょう
-    </div>
-  );
-}
-
-/** Above the composer while a turn is running; always offers a stop. */
-function StopBar({ label, onStop }: { label: string; onStop: () => void }) {
-  return (
-    <div className="mx-2 mb-2 flex items-center gap-2 rounded-2xl border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-      <span className="size-2 animate-pulse rounded-full bg-sky-400" />
-      <span className="flex-1">{label}</span>
-      <Button size="sm" variant="outline" onClick={onStop}>
-        停止
-      </Button>
     </div>
   );
 }

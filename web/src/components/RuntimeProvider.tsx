@@ -54,15 +54,22 @@ function filesFromAttachments(
 
 export function RuntimeProvider({
   messages,
+  isRunning,
   onNew,
+  onCancel,
   children,
 }: {
   messages: ThreadMessageLike[];
+  isRunning: boolean;
   onNew: (text: string, files: PromptFile[]) => Promise<void>;
+  onCancel: () => Promise<void>;
   children: ReactNode;
 }) {
   const runtime = useExternalStoreRuntime<ThreadMessageLike>({
-    isRunning: false,
+    // While a turn is in flight, assistant-ui swaps the composer's send button
+    // for its own cancel button and emits a "thinking" indicator part.
+    isRunning,
+    onCancel,
     messages,
     convertMessage: (message) => message,
     // The composer's attach button needs an adapter; without one it does
