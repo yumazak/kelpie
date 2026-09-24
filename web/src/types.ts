@@ -71,6 +71,14 @@ export interface OcMessagesResponse {
 }
 
 /** A pending permission request. */
+/** Where a permission request came from: the tool call it gates. */
+export interface OcPermissionSource {
+  type: "tool";
+  messageID: string;
+  /** The id of the tool call inside that message. */
+  id: string;
+}
+
 export interface OcPermission {
   id: string;
   sessionID: string;
@@ -79,6 +87,7 @@ export interface OcPermission {
   save?: string[];
   metadata?: Record<string, unknown>;
   message?: string;
+  source?: OcPermissionSource;
 }
 
 /** A condition that controls whether a form field is shown. */

@@ -1,17 +1,27 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import type { ThreadMessageLike } from "@assistant-ui/react";
 
-import { Thread } from "@/components/assistant-ui/elements/thread.aui";
+import {
+  ToolGroupContent,
+  ToolGroupRoot,
+  ToolGroupTrigger,
+} from "@/components/assistant-ui/elements/tool-group.aui";
+import {
+  Thread,
+  type ThreadGroupPart,
+} from "@/components/assistant-ui/elements/thread.aui";
 import {
   fetchForms,
   fetchMessages,
   fetchPermissions,
   interruptSession,
+  replyPermission,
   sendPrompt,
   type PromptFile,
 } from "../api";
 import { useLiveMessage } from "../hooks/useLiveMessage";
-import { toThreadMessages } from "../lib/convert";
+import { attachApprovals, toThreadMessages } from "../lib/convert";
 import type { OcForm, OcPermission, OcSession } from "../types";
 import { ErrorState } from "./ErrorState";
 import { HarnessDock } from "./HarnessDock";
@@ -159,21 +169,34 @@ export function Chat({
     void reload();
   }, [session.id, reload]);
 
+  const handlePermissionReply = useCallback(
+    async (id: string, decision: "once" | "always" | "reject") => {
+      await replyPermission(session.id, id, decision);
+      await refreshDock();
+      void reload();
+    },
+    [session.id, refreshDock, reload],
+  );
+
+  // The pending permissions ride along on the tool calls they gate.
+  const withApprovals = useMemo(
+    () => attachApprovals(messages, permissions),
+    [messages, permissions],
+  );
+
   const isRunning = running || session.active === true;
   const rendered = [
-    ...messages,
+    ...withApprovals,
     ...(optimistic ? [optimistic] : []),
     ...(live ? [live] : isRunning ? [THINKING] : []),
   ];
 
-  // The running indicator and the stop button are assistant-ui's own (the
-  // `indicator` part and the composer's cancel action); the dock is only for
-  // permissions and forms.
+  // The running indicator, the stop button and the permission approvals are
+  // all assistant-ui's own; the dock is only for forms.
   const dock =
-    permissions.length > 0 || forms.length > 0 ? (
+    forms.length > 0 ? (
       <HarnessDock
         sessionId={session.id}
-        permissions={permissions}
         forms={forms}
         onReplied={refreshDock}
       />
@@ -212,12 +235,47 @@ export function Chat({
             isLoading={loading}
             onNew={handleNew}
             onCancel={handleStop}
+            onPermissionReply={handlePermissionReply}
           >
-            <Thread components={{ Welcome }} dock={dock} />
+            <Thread
+              components={{ Welcome, ToolGroup: KelpieToolGroup }}
+              dock={dock}
+            />
           </RuntimeProvider>
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * The tool group, but one holding a pending approval opens itself — the
+ * permission would otherwise be hidden behind a collapsed "1 tool call".
+ */
+function KelpieToolGroup({
+  group,
+  children,
+}: {
+  group: ThreadGroupPart;
+  children?: ReactNode;
+}) {
+  const needsAction = group.counts.requiresAction > 0;
+  const [open, setOpen] = useState(needsAction);
+  const [wasNeedingAction, setWasNeedingAction] = useState(needsAction);
+  // A permission can arrive after the group mounted collapsed; open it then.
+  if (needsAction !== wasNeedingAction) {
+    setWasNeedingAction(needsAction);
+    if (needsAction) setOpen(true);
+  }
+
+  return (
+    <ToolGroupRoot variant="ghost" open={open} onOpenChange={setOpen}>
+      <ToolGroupTrigger
+        count={group.indices.length}
+        active={group.counts.running > 0}
+      />
+      <ToolGroupContent>{children}</ToolGroupContent>
+    </ToolGroupRoot>
   );
 }
 

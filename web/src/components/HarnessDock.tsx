@@ -1,11 +1,12 @@
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { replyForm, replyPermission } from "../api";
-import type { OcForm, OcFormField, OcFormWhen, OcPermission } from "../types";
+import { replyForm } from "../api";
+import type { OcForm, OcFormField, OcFormWhen } from "../types";
 
-// opencode's own blocking prompts, answered from the phone: a permission
-// request becomes allow / always / reject, and a form becomes its fields.
+// opencode's own blocking prompts, answered from the phone. Permissions are
+// assistant-ui's approval now (attached to the tool call they gate); this dock
+// is what a typed, multi-field form needs.
 
 /** A form answer value, before it is coerced for the reply. */
 type FormValue = string | boolean | string[];
@@ -123,19 +124,17 @@ function buildAnswer(
 
 export function HarnessDock({
   sessionId,
-  permissions,
   forms,
   onReplied,
 }: {
   sessionId: string;
-  permissions: OcPermission[];
   forms: OcForm[];
   onReplied: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
   const [values, setValues] = useState<Record<string, FormValue>>({});
 
-  if (permissions.length === 0 && forms.length === 0) return null;
+  if (forms.length === 0) return null;
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -149,62 +148,6 @@ export function HarnessDock({
 
   return (
     <div className="mx-2 mb-2 flex flex-col gap-2">
-      {permissions.map((permission) => (
-        <div
-          key={permission.id}
-          className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3"
-        >
-          <div className="mb-2 flex items-center gap-2 text-sm">
-            <span aria-hidden>⛔</span>
-            <span className="font-medium">
-              {permission.action ?? "permission"}
-            </span>
-          </div>
-          {(permission.message || (permission.resources?.length ?? 0) > 0) && (
-            <pre className="mb-3 max-h-32 overflow-auto rounded-lg bg-background/60 p-2 font-mono text-xs break-words whitespace-pre-wrap">
-              {[permission.message, ...(permission.resources ?? [])]
-                .filter(Boolean)
-                .join("\n")}
-            </pre>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              disabled={busy}
-              onClick={() =>
-                void run(() => replyPermission(sessionId, permission.id, "once"))
-              }
-            >
-              許可
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={busy}
-              onClick={() =>
-                void run(() =>
-                  replyPermission(sessionId, permission.id, "always"),
-                )
-              }
-            >
-              常に許可
-            </Button>
-            <Button
-              size="sm"
-              variant="destructive"
-              disabled={busy}
-              onClick={() =>
-                void run(() =>
-                  replyPermission(sessionId, permission.id, "reject"),
-                )
-              }
-            >
-              拒否
-            </Button>
-          </div>
-        </div>
-      ))}
-
       {forms.map((form) => (
         <div
           key={form.id}

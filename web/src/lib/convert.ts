@@ -4,9 +4,9 @@
 // message carries `content[]` of text / reasoning / tool parts. Nothing is
 // scraped, so this is a straight rename.
 
-import type { ThreadMessageLike } from "@assistant-ui/react";
+import type { ThreadMessageLike, ToolCallMessagePart } from "@assistant-ui/react";
 
-import type { OcMessage } from "../types";
+import type { OcMessage, OcPermission } from "../types";
 
 type Part = Exclude<NonNullable<ThreadMessageLike["content"]>, string>[number];
 
@@ -47,6 +47,57 @@ function toolSummary(input: unknown): string {
 }
 
 export { toolSummary };
+
+/** A pending permission, as assistant-ui's tool-approval request. */
+function approvalOf(
+  permission: OcPermission,
+): NonNullable<ToolCallMessagePart["approval"]> {
+  return {
+    id: permission.id,
+    prompt: permission.message || permission.action || "この操作を許可しますか？",
+    options: [
+      { id: "once", kind: "allow-once", label: "許可" },
+      { id: "always", kind: "allow-always", label: "常に許可" },
+      { id: "reject", kind: "reject-once", label: "拒否" },
+    ],
+  };
+}
+
+/**
+ * Attach each pending permission to the tool call it gates, so assistant-ui's
+ * own tool card renders the approval inline. A permission with no tool source,
+ * or one whose tool call already ran, is left alone.
+ */
+export function attachApprovals(
+  messages: ThreadMessageLike[],
+  permissions: OcPermission[],
+): ThreadMessageLike[] {
+  const pending = permissions.filter(
+    (permission) => permission.source?.type === "tool",
+  );
+  if (pending.length === 0) return messages;
+
+  return messages.map((message) => {
+    // Assistant messages are keyed `a-<opencode message id>`.
+    const rawId = message.id?.replace(/^a-/, "");
+    const forMessage = pending.filter(
+      (permission) => permission.source?.messageID === rawId,
+    );
+    if (forMessage.length === 0 || !Array.isArray(message.content)) {
+      return message;
+    }
+    const content = message.content.map((part) => {
+      if (part.type !== "tool-call") return part;
+      const permission = forMessage.find(
+        (candidate) => candidate.source?.id === part.toolCallId,
+      );
+      // A tool that already produced a result cannot be awaiting approval.
+      if (!permission || part.result !== undefined) return part;
+      return { ...part, approval: approvalOf(permission) };
+    });
+    return { ...message, content };
+  });
+}
 
 /** The names of a user message's attachments, for a one-line note. */
 function fileNames(files: unknown): string[] {

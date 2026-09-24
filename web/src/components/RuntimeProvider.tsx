@@ -58,6 +58,7 @@ export function RuntimeProvider({
   isLoading,
   onNew,
   onCancel,
+  onPermissionReply,
   children,
 }: {
   messages: ThreadMessageLike[];
@@ -65,6 +66,10 @@ export function RuntimeProvider({
   isLoading?: boolean;
   onNew: (text: string, files: PromptFile[]) => Promise<void>;
   onCancel: () => Promise<void>;
+  onPermissionReply: (
+    id: string,
+    decision: "once" | "always" | "reject",
+  ) => Promise<void>;
   children: ReactNode;
 }) {
   const runtime = useExternalStoreRuntime<ThreadMessageLike>({
@@ -75,6 +80,16 @@ export function RuntimeProvider({
     // skeleton instead of our own placeholder.
     isLoading,
     onCancel,
+    // The tool card renders the approval; its answer comes back here.
+    onRespondToToolApproval: (options) => {
+      const decision =
+        options.optionId === "always"
+          ? "always"
+          : options.optionId === "reject" || options.approved === false
+            ? "reject"
+            : "once";
+      return onPermissionReply(options.approvalId, decision);
+    },
     messages,
     convertMessage: (message) => message,
     // The composer's attach button needs an adapter; without one it does
