@@ -6,6 +6,7 @@ import {
   fetchForms,
   fetchMessages,
   fetchPermissions,
+  interruptSession,
   sendPrompt,
   type PromptFile,
 } from "../api";
@@ -15,6 +16,7 @@ import type { OcForm, OcPermission, OcSession } from "../types";
 import { ErrorState } from "./ErrorState";
 import { HarnessDock } from "./HarnessDock";
 import { RuntimeProvider } from "./RuntimeProvider";
+import { Button } from "@/components/ui/button";
 
 /** Fallback poll: the live event stream is primary, but a missed event (a
  *  reconnect, a dropped frame) is healed here within a couple of seconds. */
@@ -137,6 +139,15 @@ export function Chat({
     [session.id, reload],
   );
 
+  const handleStop = useCallback(async () => {
+    try {
+      await interruptSession(session.id);
+    } catch {
+      /* the turn may already be over */
+    }
+    void reload();
+  }, [session.id, reload]);
+
   const rendered = [
     ...messages,
     ...(optimistic ? [optimistic] : []),
@@ -152,7 +163,7 @@ export function Chat({
         onReplied={refreshDock}
       />
     ) : (running || session.active) && !live ? (
-      <ThinkingBar />
+      <ThinkingBar onStop={() => void handleStop()} />
     ) : undefined;
 
   return (
@@ -201,11 +212,14 @@ function Welcome() {
 }
 
 /** Above the composer while a turn is running and no text has arrived yet. */
-function ThinkingBar() {
+function ThinkingBar({ onStop }: { onStop: () => void }) {
   return (
     <div className="mx-2 mb-2 flex items-center gap-2 rounded-2xl border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
       <span className="size-2 animate-pulse rounded-full bg-sky-400" />
-      考え中…
+      <span className="flex-1">考え中…</span>
+      <Button size="sm" variant="outline" onClick={onStop}>
+        停止
+      </Button>
     </div>
   );
 }

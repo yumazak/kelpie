@@ -135,6 +135,16 @@ impl OpencodeClient {
             .await
     }
 
+    /// Interrupt the running turn (the session goes back to idle).
+    pub async fn interrupt_session(&self, session_id: &str) -> Result<Value, OpencodeError> {
+        self.json(
+            reqwest::Method::POST,
+            &format!("/api/session/{session_id}/interrupt"),
+            None,
+        )
+        .await
+    }
+
     /// Delete a session and its child sessions.
     pub async fn delete_session(&self, session_id: &str) -> Result<Value, OpencodeError> {
         self.json(

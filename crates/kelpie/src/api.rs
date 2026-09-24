@@ -94,6 +94,7 @@ pub fn router(state: AppState, static_dir: Option<PathBuf>) -> Router {
         .route("/api/sessions/{id}/messages", get(oc_messages))
         .route("/api/sessions/{id}", delete(oc_delete_session))
         .route("/api/sessions/{id}/prompt", post(oc_prompt))
+        .route("/api/sessions/{id}/interrupt", post(oc_interrupt))
         .route("/api/sessions/{id}/permissions", get(oc_permissions))
         .route("/api/sessions/{id}/forms", get(oc_forms))
         .route(
@@ -318,6 +319,15 @@ async fn oc_prompt(
             .await
             .map_err(oc_error)?,
     ))
+}
+
+/// Interrupt the running turn.
+async fn oc_interrupt(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let client = state.opencode().await?;
+    Ok(Json(client.interrupt_session(&id).await.map_err(oc_error)?))
 }
 
 async fn oc_permissions(

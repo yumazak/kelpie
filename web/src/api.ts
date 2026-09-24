@@ -65,6 +65,14 @@ export async function sendPrompt(
   throw new Error(detail);
 }
 
+/** Interrupt the running turn. */
+export function interruptSession(sessionId: string): Promise<void> {
+  return postJson(
+    `/api/sessions/${encodeURIComponent(sessionId)}/interrupt`,
+    {},
+  );
+}
+
 /** Delete a session and its child sessions. Destructive. */
 export async function deleteSession(sessionId: string): Promise<void> {
   const response = await fetch(
