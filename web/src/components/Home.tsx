@@ -62,7 +62,7 @@ export function Home({
     return <div className="p-6 text-sm text-destructive">{error}</div>;
   }
   if (!state) {
-    return <div className="p-6 text-sm text-muted-foreground">接続中…</div>;
+    return <HomeSkeleton />;
   }
 
   // The list re-renders on every poll, so reading the clock here is what keeps
@@ -232,5 +232,21 @@ function TabButton({
     >
       {label} <span className="text-xs opacity-70">{count}</span>
     </button>
+  );
+}
+
+/** A list-shaped placeholder while the first fetch lands. */
+function HomeSkeleton() {
+  return (
+    <div className="mx-auto max-w-2xl px-4 py-5">
+      <div className="mb-4 h-6 w-24 animate-pulse rounded bg-muted" />
+      <div className="mb-5 h-9 w-full animate-pulse rounded-xl bg-muted" />
+      {[0, 1, 2, 3, 4, 5].map((row) => (
+        <div
+          key={row}
+          className="mb-2 h-12 w-full animate-pulse rounded-xl bg-muted"
+        />
+      ))}
+    </div>
   );
 }

@@ -125,13 +125,12 @@ export function Chat({
       </header>
 
       <div className="min-h-0 flex-1">
-        {loading && (
-          <div className="p-6 text-sm text-muted-foreground">読み込み中…</div>
-        )}
+        {loading && <ChatSkeleton />}
         {error && <div className="p-6 text-sm text-destructive">{error}</div>}
         {!loading && !error && (
           <RuntimeProvider messages={rendered} onNew={handleNew}>
             <Thread
+              components={{ Welcome }}
               dock={
                 permissions.length > 0 || forms.length > 0 ? (
                   <HarnessDock
@@ -146,6 +145,31 @@ export function Chat({
           </RuntimeProvider>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Shown for a session with no turns yet. */
+function Welcome() {
+  return (
+    <div className="mb-6 px-2 text-sm text-muted-foreground">
+      メッセージを送って会話を始めましょう
+    </div>
+  );
+}
+
+/** A chat-shaped placeholder while the first fetch lands. */
+function ChatSkeleton() {
+  return (
+    <div className="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-6">
+      <div className="ml-auto h-9 w-1/3 animate-pulse rounded-2xl bg-muted" />
+      <div className="flex flex-col gap-2">
+        <div className="h-4 w-11/12 animate-pulse rounded bg-muted" />
+        <div className="h-4 w-4/5 animate-pulse rounded bg-muted" />
+        <div className="h-4 w-3/5 animate-pulse rounded bg-muted" />
+      </div>
+      <div className="h-12 w-full animate-pulse rounded-xl bg-muted" />
+      <div className="ml-auto h-9 w-2/5 animate-pulse rounded-2xl bg-muted" />
     </div>
   );
 }
