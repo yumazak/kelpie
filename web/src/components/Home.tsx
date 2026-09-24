@@ -1,6 +1,18 @@
+import { useState } from "react";
+import { EllipsisVertical } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { deleteSession } from "../api";
 import type { OcSession, OcSessionsResponse } from "../types";
-import { NotifyButton } from "./NotifyButton";
 
 function basename(path?: string): string {
   if (!path) return "(unknown)";
@@ -29,11 +41,16 @@ export function Home({
   state,
   error,
   onSelect,
+  onRefresh,
 }: {
   state: OcSessionsResponse | null;
   error: string | null;
   onSelect: (session: OcSession) => void;
+  onRefresh: () => Promise<void>;
 }) {
+  const [pendingDelete, setPendingDelete] = useState<OcSession | null>(null);
+  const [busy, setBusy] = useState(false);
+
   if (error) {
     return <div className="p-6 text-sm text-destructive">{error}</div>;
   }
@@ -54,15 +71,24 @@ export function Home({
     return latest(b[1]) - latest(a[1]);
   });
 
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setBusy(true);
+    try {
+      await deleteSession(pendingDelete.id);
+      await onRefresh();
+      setPendingDelete(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-5">
       <header className="mb-5 flex items-center justify-between">
         <div className="text-lg font-semibold">kelpie</div>
-        <div className="flex items-center gap-2">
-          <div className="text-xs text-muted-foreground">
-            opencode · {state.sessions.length} sessions
-          </div>
-          <NotifyButton />
+        <div className="text-xs text-muted-foreground">
+          opencode · {state.sessions.length} sessions
         </div>
       </header>
 
@@ -79,33 +105,74 @@ export function Home({
           </h2>
           <div className="flex flex-col gap-1">
             {sessions.map((session) => (
-              <button
+              <div
                 key={session.id}
-                type="button"
-                onClick={() => onSelect(session)}
-                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-accent"
+                className="flex items-center gap-1 rounded-xl hover:bg-accent"
               >
-                <span
-                  className={cn(
-                    "size-2 shrink-0 rounded-full",
-                    statusColor(session),
-                  )}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm">
-                    {session.title || session.id}
+                <button
+                  type="button"
+                  onClick={() => onSelect(session)}
+                  className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-left"
+                >
+                  <span
+                    className={cn(
+                      "size-2 shrink-0 rounded-full",
+                      statusColor(session),
+                    )}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm">
+                      {session.title || session.id}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {[session.agent, relative(session.time?.updated)]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
                   </span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {[session.agent, relative(session.time?.updated)]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </span>
-                </span>
-              </button>
+                </button>
+                <button
+                  type="button"
+                  aria-label="セッションの操作"
+                  onClick={() => setPendingDelete(session)}
+                  className="mr-1 rounded-lg p-2 text-muted-foreground hover:bg-background hover:text-foreground"
+                >
+                  <EllipsisVertical className="size-4" />
+                </button>
+              </div>
             ))}
           </div>
         </section>
       ))}
+
+      <Dialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>セッションを削除</DialogTitle>
+            <DialogDescription>
+              「{pendingDelete?.title || pendingDelete?.id}
+              」を削除します。子セッションも含めて元に戻せません。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingDelete(null)}>
+              キャンセル
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={busy}
+              onClick={() => void confirmDelete()}
+            >
+              削除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

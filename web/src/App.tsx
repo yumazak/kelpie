@@ -79,26 +79,24 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  useEffect(() => {
-    let active = true;
-    const load = () => {
-      fetchSessions()
-        .then((next) => {
-          if (!active) return;
-          setState(next);
-          setError(null);
-        })
-        .catch((fetchError: unknown) => {
-          if (active) setError(String(fetchError));
-        });
-    };
-    load();
-    const id = window.setInterval(load, SESSIONS_POLL_MS);
-    return () => {
-      active = false;
-      window.clearInterval(id);
-    };
+  const loadSessions = useCallback(async () => {
+    try {
+      const next = await fetchSessions();
+      setState(next);
+      setError(null);
+    } catch (fetchError: unknown) {
+      setError(String(fetchError));
+    }
   }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react/set-state-in-effect
+    void loadSessions();
+    const id = window.setInterval(() => {
+      void loadSessions();
+    }, SESSIONS_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [loadSessions]);
 
   if (selected) {
     const live = state?.sessions.find((session) => session.id === selected.id);
@@ -111,5 +109,12 @@ export default function App() {
     );
   }
 
-  return <Home state={state} error={error} onSelect={openSession} />;
+  return (
+    <Home
+      state={state}
+      error={error}
+      onSelect={openSession}
+      onRefresh={loadSessions}
+    />
+  );
 }

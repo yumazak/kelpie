@@ -13,7 +13,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::json;
@@ -92,6 +92,7 @@ pub fn router(state: AppState, static_dir: Option<PathBuf>) -> Router {
         .route("/api/sessions", get(oc_sessions))
         .route("/api/events", get(oc_events))
         .route("/api/sessions/{id}/messages", get(oc_messages))
+        .route("/api/sessions/{id}", delete(oc_delete_session))
         .route("/api/sessions/{id}/prompt", post(oc_prompt))
         .route("/api/sessions/{id}/permissions", get(oc_permissions))
         .route("/api/sessions/{id}/forms", get(oc_forms))
@@ -267,6 +268,15 @@ async fn oc_messages(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let client = state.opencode().await?;
     Ok(Json(client.messages(&id, 200).await.map_err(oc_error)?))
+}
+
+/// Delete a session and its child sessions. Destructive and irreversible.
+async fn oc_delete_session(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let client = state.opencode().await?;
+    Ok(Json(client.delete_session(&id).await.map_err(oc_error)?))
 }
 
 #[derive(Debug, Deserialize)]

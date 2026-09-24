@@ -129,6 +129,16 @@ impl OpencodeClient {
         Ok(value)
     }
 
+    /// Delete a session and its child sessions.
+    pub async fn delete_session(&self, session_id: &str) -> Result<Value, OpencodeError> {
+        self.json(
+            reqwest::Method::DELETE,
+            &format!("/api/session/{session_id}"),
+            None,
+        )
+        .await
+    }
+
     /// The directory a session ran in, when the service reports one. Used to
     /// name the project on a notification for an event that carries no
     /// `location` (the execution events do not).

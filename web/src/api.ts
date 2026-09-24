@@ -33,8 +33,7 @@ export function fetchMessages(sessionId: string): Promise<OcMessagesResponse> {
   );
 }
 
-/** Send a prompt to a session. */
-export async function sendPrompt(
+/** Send a prompt to a session. */export async function sendPrompt(
   sessionId: string,
   text: string,
 ): Promise<void> {
@@ -45,6 +44,23 @@ export async function sendPrompt(
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text }),
     },
+  );
+  if (response.ok) return;
+  let detail = `${response.status} ${response.statusText}`;
+  try {
+    const body = (await response.json()) as { code?: string; message?: string };
+    detail = [body.code, body.message].filter(Boolean).join(": ") || detail;
+  } catch {
+    /* keep the status line */
+  }
+  throw new Error(detail);
+}
+
+/** Delete a session and its child sessions. Destructive. */
+export async function deleteSession(sessionId: string): Promise<void> {
+  const response = await fetch(
+    `/api/sessions/${encodeURIComponent(sessionId)}`,
+    { method: "DELETE" },
   );
   if (response.ok) return;
   let detail = `${response.status} ${response.statusText}`;
