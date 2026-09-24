@@ -1,0 +1,21 @@
+[package]
+name = "kelpie-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "kelpie command line"
+
+[[bin]]
+name = "kelpie"
+path = "src/main.rs"
+
+[dependencies]
+kelpie = { path = "../kelpie" }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
