@@ -162,8 +162,11 @@ export function Chat({
         forms={forms}
         onReplied={refreshDock}
       />
-    ) : (running || session.active) && !live ? (
-      <ThinkingBar onStop={() => void handleStop()} />
+    ) : running || session.active ? (
+      <StopBar
+        label={live ? "実行中…" : "考え中…"}
+        onStop={() => void handleStop()}
+      />
     ) : undefined;
 
   return (
@@ -211,12 +214,12 @@ function Welcome() {
   );
 }
 
-/** Above the composer while a turn is running and no text has arrived yet. */
-function ThinkingBar({ onStop }: { onStop: () => void }) {
+/** Above the composer while a turn is running; always offers a stop. */
+function StopBar({ label, onStop }: { label: string; onStop: () => void }) {
   return (
     <div className="mx-2 mb-2 flex items-center gap-2 rounded-2xl border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
       <span className="size-2 animate-pulse rounded-full bg-sky-400" />
-      <span className="flex-1">考え中…</span>
+      <span className="flex-1">{label}</span>
       <Button size="sm" variant="outline" onClick={onStop}>
         停止
       </Button>
