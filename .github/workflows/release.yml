@@ -38,6 +38,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Build kelpie
+        env:
+          KELPIE_VERSION: ${{ github.event.inputs.tag_name || github.ref_name }}
         run: cargo build --release -p kelpie-cli
 
       - name: Package

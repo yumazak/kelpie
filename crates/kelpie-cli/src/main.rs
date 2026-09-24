@@ -18,7 +18,7 @@ mod service;
 #[derive(Parser)]
 #[command(
     name = "kelpie",
-    version,
+    version = kelpie::VERSION,
     about = "Mobile web UI for the agents running on an opencode server"
 )]
 struct Cli {
@@ -202,7 +202,7 @@ async fn cmd_push_test() -> Result<()> {
 }
 
 async fn cmd_doctor() -> Result<()> {
-    println!("kelpie {}", env!("CARGO_PKG_VERSION"));
+    println!("kelpie {}", kelpie::VERSION);
 
     match OpencodeClient::discover() {
         Ok(client) => {

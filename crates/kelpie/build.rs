@@ -11,4 +11,13 @@ fn main() {
         println!("cargo:rustc-cfg=has_web");
     }
     println!("cargo:rerun-if-changed=../../web/dist");
+    println!("cargo:rerun-if-env-changed=KELPIE_VERSION");
+
+    // The release workflow passes the git tag, so `--version` reports it even
+    // when Cargo.toml was not bumped in lockstep.
+    let version = std::env::var("KELPIE_VERSION")
+        .or_else(|_| std::env::var("CARGO_PKG_VERSION"))
+        .unwrap_or_else(|_| "0.0.0".to_string());
+    let version = version.trim_start_matches('v');
+    println!("cargo:rustc-env=KELPIE_VERSION={version}");
 }

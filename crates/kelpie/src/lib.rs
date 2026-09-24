@@ -11,5 +11,9 @@ pub mod opencode;
 pub mod push;
 mod web;
 
+/// The version this binary reports. Stamped from the git tag at release time,
+/// and from `Cargo.toml` otherwise.
+pub const VERSION: &str = env!("KELPIE_VERSION");
+
 pub use api::AppState;
 pub use opencode::OpencodeClient;
