@@ -44,8 +44,9 @@ jobs:
         run: |
           mkdir -p out
           cp target/release/kelpie out/kelpie-aarch64-apple-darwin
-          shasum -a 256 out/kelpie-aarch64-apple-darwin \
-            > out/kelpie-aarch64-apple-darwin.sha256
+          cd out
+          shasum -a 256 kelpie-aarch64-apple-darwin \
+            > kelpie-aarch64-apple-darwin.sha256
 
       - uses: softprops/action-gh-release@v2
         with:
