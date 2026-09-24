@@ -13,6 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { deleteSession } from "../api";
 import type { OcSession, OcSessionsResponse } from "../types";
+import { ErrorState } from "./ErrorState";
 
 type Tab = "recent" | "all";
 
@@ -59,7 +60,7 @@ export function Home({
   const [busy, setBusy] = useState(false);
 
   if (error) {
-    return <div className="p-6 text-sm text-destructive">{error}</div>;
+    return <ErrorState detail={error} onRetry={() => void onRefresh()} />;
   }
   if (!state) {
     return <HomeSkeleton />;

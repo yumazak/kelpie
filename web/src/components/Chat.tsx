@@ -7,6 +7,7 @@ import { useLiveMessage } from "../hooks/useLiveMessage";
 import { toThreadMessages } from "../lib/convert";
 import type { OcForm, OcPermission, OcSession } from "../types";
 import { HarnessDock } from "./HarnessDock";
+import { ErrorState } from "./ErrorState";
 import { RuntimeProvider } from "./RuntimeProvider";
 
 /** Fallback poll: the live event stream is primary, but a missed event (a
@@ -126,7 +127,9 @@ export function Chat({
 
       <div className="min-h-0 flex-1">
         {loading && <ChatSkeleton />}
-        {error && <div className="p-6 text-sm text-destructive">{error}</div>}
+        {error && (
+          <ErrorState detail={error} onRetry={() => void reload()} />
+        )}
         {!loading && !error && (
           <RuntimeProvider messages={rendered} onNew={handleNew}>
             <Thread
