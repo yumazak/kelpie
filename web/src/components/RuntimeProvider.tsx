@@ -55,12 +55,14 @@ function filesFromAttachments(
 export function RuntimeProvider({
   messages,
   isRunning,
+  isLoading,
   onNew,
   onCancel,
   children,
 }: {
   messages: ThreadMessageLike[];
   isRunning: boolean;
+  isLoading?: boolean;
   onNew: (text: string, files: PromptFile[]) => Promise<void>;
   onCancel: () => Promise<void>;
   children: ReactNode;
@@ -69,6 +71,9 @@ export function RuntimeProvider({
     // While a turn is in flight, assistant-ui swaps the composer's send button
     // for its own cancel button and emits a "thinking" indicator part.
     isRunning,
+    // While the first fetch lands, assistant-ui renders its own history
+    // skeleton instead of our own placeholder.
+    isLoading,
     onCancel,
     messages,
     convertMessage: (message) => message,

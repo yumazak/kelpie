@@ -203,12 +203,13 @@ export function Chat({
       </header>
 
       <div className="min-h-0 flex-1">
-        {loading && <ChatSkeleton />}
-        {error && <ErrorState detail={error} onRetry={() => void reload()} />}
-        {!loading && !error && (
+        {error ? (
+          <ErrorState detail={error} onRetry={() => void reload()} />
+        ) : (
           <RuntimeProvider
             messages={rendered}
             isRunning={isRunning}
+            isLoading={loading}
             onNew={handleNew}
             onCancel={handleStop}
           >
@@ -229,18 +230,3 @@ function Welcome() {
   );
 }
 
-/** A chat-shaped placeholder while the first fetch lands. */
-function ChatSkeleton() {
-  return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-6">
-      <div className="ml-auto h-9 w-1/3 animate-pulse rounded-2xl bg-muted" />
-      <div className="flex flex-col gap-2">
-        <div className="h-4 w-11/12 animate-pulse rounded bg-muted" />
-        <div className="h-4 w-4/5 animate-pulse rounded bg-muted" />
-        <div className="h-4 w-3/5 animate-pulse rounded bg-muted" />
-      </div>
-      <div className="h-12 w-full animate-pulse rounded-xl bg-muted" />
-      <div className="ml-auto h-9 w-2/5 animate-pulse rounded-2xl bg-muted" />
-    </div>
-  );
-}
