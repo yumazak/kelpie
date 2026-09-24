@@ -1,0 +1,54 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Tag to release
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      # The PWA is embedded into the binary, so it must exist before cargo.
+      - name: Build the PWA
+        working-directory: web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build kelpie
+        run: cargo build --release -p kelpie-cli
+
+      - name: Package
+        run: |
+          mkdir -p out
+          cp target/release/kelpie out/kelpie-aarch64-apple-darwin
+          shasum -a 256 out/kelpie-aarch64-apple-darwin \
+            > out/kelpie-aarch64-apple-darwin.sha256
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+          files: out/*
+          generate_release_notes: true

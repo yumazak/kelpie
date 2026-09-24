@@ -31,7 +31,8 @@ enum Command {
         /// Loopback port to bind.
         #[arg(long, default_value_t = 7180)]
         port: u16,
-        /// Directory of the built PWA to serve as a fallback.
+        /// Directory of a PWA build to serve instead of the embedded one
+        /// (development).
         #[arg(long)]
         static_dir: Option<PathBuf>,
     },

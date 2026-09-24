@@ -108,16 +108,25 @@ pub fn router(state: AppState, static_dir: Option<PathBuf>) -> Router {
         .route("/api/push/test", post(push_test))
         .with_state(state);
 
-    match static_dir {
-        Some(dir) => {
-            let index = dir.join("index.html");
-            app.fallback_service(
-                tower_http::services::ServeDir::new(dir)
-                    .fallback(tower_http::services::ServeFile::new(index)),
-            )
-        }
-        None => app,
+    if let Some(dir) = static_dir {
+        let index = dir.join("index.html");
+        return app.fallback_service(
+            tower_http::services::ServeDir::new(dir)
+                .fallback(tower_http::services::ServeFile::new(index)),
+        );
     }
+    serve_embedded(app)
+}
+
+/// Attach the embedded PWA when the build has one.
+#[cfg(has_web)]
+fn serve_embedded(app: Router) -> Router {
+    app.fallback(get(crate::web::serve))
+}
+
+#[cfg(not(has_web))]
+fn serve_embedded(app: Router) -> Router {
+    app
 }
 
 /// Bind the API, start the event relay, and serve until the process ends.

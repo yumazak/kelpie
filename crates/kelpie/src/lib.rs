@@ -9,6 +9,7 @@
 pub mod api;
 pub mod opencode;
 pub mod push;
+mod web;
 
 pub use api::AppState;
 pub use opencode::OpencodeClient;
