@@ -26,6 +26,8 @@ export interface OcSession {
   time?: OcTime;
   location?: { directory?: string };
   cost?: number;
+  /** True while a turn is in flight (merged from `/api/session/active`). */
+  active?: boolean;
 }
 
 export interface OcSessionsResponse {

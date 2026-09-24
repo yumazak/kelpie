@@ -129,6 +129,12 @@ impl OpencodeClient {
         Ok(value)
     }
 
+    /// Sessions with a turn in flight. `{ ses_id: { type: "running" } }`.
+    pub async fn active_sessions(&self) -> Result<Value, OpencodeError> {
+        self.json(reqwest::Method::GET, "/api/session/active", None)
+            .await
+    }
+
     /// Delete a session and its child sessions.
     pub async fn delete_session(&self, session_id: &str) -> Result<Value, OpencodeError> {
         self.json(

@@ -14,6 +14,8 @@ import { cn } from "@/lib/utils";
 import { deleteSession } from "../api";
 import type { OcSession, OcSessionsResponse } from "../types";
 
+type Tab = "active" | "all";
+
 function basename(path?: string): string {
   if (!path) return "(unknown)";
   const parts = path.replace(/\/+$/, "").split("/");
@@ -30,13 +32,14 @@ function relative(ms?: number): string {
 }
 
 function statusColor(session: OcSession): string {
+  if (session.active) return "animate-pulse bg-sky-400";
   if (session.outcome === "failed") return "bg-red-500";
   if (session.outcome === "interrupted") return "bg-amber-400";
   if (session.time?.idle) return "bg-emerald-500";
   return "bg-amber-400";
 }
 
-/** Every session, grouped by the directory it ran in. */
+/** Every session, grouped by the directory it ran in, behind two tabs. */
 export function Home({
   state,
   error,
@@ -48,6 +51,7 @@ export function Home({
   onSelect: (session: OcSession) => void;
   onRefresh: () => Promise<void>;
 }) {
+  const [tab, setTab] = useState<Tab>("all");
   const [pendingDelete, setPendingDelete] = useState<OcSession | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -58,8 +62,11 @@ export function Home({
     return <div className="p-6 text-sm text-muted-foreground">接続中…</div>;
   }
 
+  const running = state.sessions.filter((session) => session.active);
+  const shown = tab === "active" ? running : state.sessions;
+
   const groups = new Map<string, OcSession[]>();
-  for (const session of state.sessions) {
+  for (const session of shown) {
     const key = session.location?.directory ?? "(unknown)";
     const list = groups.get(key) ?? [];
     list.push(session);
@@ -85,16 +92,29 @@ export function Home({
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-5">
-      <header className="mb-5 flex items-center justify-between">
+      <header className="mb-4 flex items-center justify-between">
         <div className="text-lg font-semibold">kelpie</div>
-        <div className="text-xs text-muted-foreground">
-          opencode · {state.sessions.length} sessions
-        </div>
+        <div className="text-xs text-muted-foreground">opencode</div>
       </header>
+
+      <div className="mb-4 flex gap-1 rounded-xl bg-muted/50 p-1 text-sm">
+        <TabButton
+          active={tab === "active"}
+          onClick={() => setTab("active")}
+          label="実行中"
+          count={running.length}
+        />
+        <TabButton
+          active={tab === "all"}
+          onClick={() => setTab("all")}
+          label="すべて"
+          count={state.sessions.length}
+        />
+      </div>
 
       {ordered.length === 0 && (
         <div className="py-16 text-center text-sm text-muted-foreground">
-          セッションがありません
+          {tab === "active" ? "実行中のセッションはありません" : "セッションがありません"}
         </div>
       )}
 
@@ -174,5 +194,32 @@ export function Home({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex-1 rounded-lg px-3 py-1.5 transition-colors",
+        active
+          ? "bg-background text-foreground shadow-sm"
+          : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {label} <span className="text-xs opacity-70">{count}</span>
+    </button>
   );
 }

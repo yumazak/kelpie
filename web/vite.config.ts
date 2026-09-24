@@ -6,7 +6,10 @@ import tailwindcss from "@tailwindcss/vite";
 
 // The dev server proxies the API to a locally running `kelpie serve`, so the
 // browser talks to one origin in development exactly as it does behind the
-// front door in production.
+// front door in production. `KELPIE_API` points it at a different port, e.g.
+// the debug binary on 7182 while the installed service holds 7180.
+const apiTarget = process.env.KELPIE_API ?? "http://127.0.0.1:7180";
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -16,7 +19,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api": "http://127.0.0.1:7180",
+      "/api": apiTarget,
     },
   },
   build: {

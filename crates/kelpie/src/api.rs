@@ -222,10 +222,29 @@ fn oc_error(error: crate::opencode::OpencodeError) -> ApiError {
 }
 
 /// Every session across every project — the cross-project list.
+/// Every session across every project — the cross-project list. Each running
+/// session carries `active: true`, so the client can mark it without a second
+/// request.
 async fn oc_sessions(State(state): State<AppState>) -> Result<Json<serde_json::Value>, ApiError> {
     let client = state.opencode().await?;
     let value = client.sessions(100).await.map_err(oc_error)?;
-    let sessions = value.get("data").cloned().unwrap_or_else(|| json!([]));
+    let mut sessions = value.get("data").cloned().unwrap_or_else(|| json!([]));
+
+    // A failure here just means nothing is marked running; the list still comes
+    // back.
+    if let Ok(active) = client.active_sessions().await
+        && let Some(running) = active.get("data").and_then(|data| data.as_object())
+        && let Some(list) = sessions.as_array_mut()
+    {
+        for session in list {
+            if let Some(id) = session.get("id").and_then(|value| value.as_str())
+                && running.contains_key(id)
+            {
+                session["active"] = json!(true);
+            }
+        }
+    }
+
     Ok(Json(json!({
         "version": env!("CARGO_PKG_VERSION"),
         "sessions": sessions,
