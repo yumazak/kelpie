@@ -22,8 +22,9 @@ export function useLiveMessage(
   sessionId: string,
   onStepEnd: () => Promise<void>,
   onDockEvent: () => void,
-): ThreadMessageLike | null {
+): { live: ThreadMessageLike | null; running: boolean } {
   const [live, setLive] = useState<ThreadMessageLike | null>(null);
+  const [running, setRunning] = useState(false);
   const parts = useRef(new Map<string, LivePart>());
 
   useEffect(() => {
@@ -65,6 +66,14 @@ export function useLiveMessage(
       const ordinal = String(data.ordinal ?? 0);
 
       switch (type) {
+        case "session.execution.started":
+          setRunning(true);
+          break;
+        case "session.execution.succeeded":
+        case "session.execution.failed":
+        case "session.execution.interrupted":
+          setRunning(false);
+          break;
         case "session.text.started":
           parts.current.set(`text:${ordinal}`, { kind: "text", text: "" });
           rebuild();
@@ -109,5 +118,5 @@ export function useLiveMessage(
     return () => source.close();
   }, [sessionId, onStepEnd, onDockEvent]);
 
-  return live;
+  return { live, running };
 }

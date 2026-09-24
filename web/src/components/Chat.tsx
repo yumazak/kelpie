@@ -2,12 +2,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ThreadMessageLike } from "@assistant-ui/react";
 
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
-import { fetchForms, fetchMessages, fetchPermissions, sendPrompt } from "../api";
+import {
+  fetchForms,
+  fetchMessages,
+  fetchPermissions,
+  sendPrompt,
+} from "../api";
 import { useLiveMessage } from "../hooks/useLiveMessage";
 import { toThreadMessages } from "../lib/convert";
 import type { OcForm, OcPermission, OcSession } from "../types";
-import { HarnessDock } from "./HarnessDock";
 import { ErrorState } from "./ErrorState";
+import { HarnessDock } from "./HarnessDock";
 import { RuntimeProvider } from "./RuntimeProvider";
 
 /** Fallback poll: the live event stream is primary, but a missed event (a
@@ -20,6 +25,14 @@ function signature(messages: ThreadMessageLike[]): string {
   return `${messages.length}:${JSON.stringify(last?.content).length}`;
 }
 
+/** The text of a message, for matching the optimistic bubble to the real one. */
+function textOf(message: ThreadMessageLike): string {
+  if (typeof message.content === "string") return message.content;
+  return message.content
+    .map((part) => (part.type === "text" ? part.text : ""))
+    .join("");
+}
+
 export function Chat({
   session,
   onBack,
@@ -28,6 +41,7 @@ export function Chat({
   onBack: () => void;
 }) {
   const [messages, setMessages] = useState<ThreadMessageLike[]>([]);
+  const [optimistic, setOptimistic] = useState<ThreadMessageLike | null>(null);
   const [permissions, setPermissions] = useState<OcPermission[]>([]);
   const [forms, setForms] = useState<OcForm[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +55,12 @@ export function Chat({
       const next = toThreadMessages(response.data);
       setMessages((previous) =>
         signature(previous) === signature(next) ? previous : next,
+      );
+      // The sent message is the server's now; drop the local stand-in.
+      setOptimistic((current) =>
+        current && next.some((m) => m.role === "user" && textOf(m) === textOf(current))
+          ? null
+          : current,
       );
       setError(null);
     } catch (fetchError: unknown) {
@@ -64,8 +84,7 @@ export function Chat({
     };
   }, [reload]);
 
-  // The pending permission / form lists. Best-effort: a failure just leaves
-  // the last dock state.
+  // The pending permission / form lists. Best-effort.
   const refreshDock = useCallback(async () => {
     try {
       const [nextPermissions, nextForms] = await Promise.all([
@@ -89,18 +108,45 @@ export function Chat({
     return () => window.clearInterval(id);
   }, [refreshDock]);
 
-  // The in-progress assistant turn, streamed from the service. It sits on top
-  // of the fetched list and is dropped when `step.ended` refetches.
-  const live = useLiveMessage(session.id, reload, refreshDock);
-  const rendered = live ? [...messages, live] : messages;
+  const { live, running } = useLiveMessage(session.id, reload, refreshDock);
 
   const handleNew = useCallback(
     async (text: string) => {
-      await sendPrompt(session.id, text);
+      // Show the message at once, before the round trip lands.
+      const local: ThreadMessageLike = {
+        id: `local-${Date.now()}`,
+        role: "user",
+        content: [{ type: "text", text }],
+      };
+      setOptimistic(local);
+      try {
+        await sendPrompt(session.id, text);
+      } catch (sendError) {
+        setOptimistic(null);
+        throw sendError;
+      }
       void reload();
     },
     [session.id, reload],
   );
+
+  const rendered = [
+    ...messages,
+    ...(optimistic ? [optimistic] : []),
+    ...(live ? [live] : []),
+  ];
+
+  const dock =
+    permissions.length > 0 || forms.length > 0 ? (
+      <HarnessDock
+        sessionId={session.id}
+        permissions={permissions}
+        forms={forms}
+        onReplied={refreshDock}
+      />
+    ) : (running || session.active) && !live ? (
+      <ThinkingBar />
+    ) : undefined;
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -109,7 +155,7 @@ export function Chat({
           type="button"
           onClick={onBack}
           className="-ml-1 rounded-lg px-2 py-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-          aria-label="Back"
+          aria-label="戻る"
         >
           ←
         </button>
@@ -127,24 +173,10 @@ export function Chat({
 
       <div className="min-h-0 flex-1">
         {loading && <ChatSkeleton />}
-        {error && (
-          <ErrorState detail={error} onRetry={() => void reload()} />
-        )}
+        {error && <ErrorState detail={error} onRetry={() => void reload()} />}
         {!loading && !error && (
           <RuntimeProvider messages={rendered} onNew={handleNew}>
-            <Thread
-              components={{ Welcome }}
-              dock={
-                permissions.length > 0 || forms.length > 0 ? (
-                  <HarnessDock
-                    sessionId={session.id}
-                    permissions={permissions}
-                    forms={forms}
-                    onReplied={refreshDock}
-                  />
-                ) : undefined
-              }
-            />
+            <Thread components={{ Welcome }} dock={dock} />
           </RuntimeProvider>
         )}
       </div>
@@ -157,6 +189,16 @@ function Welcome() {
   return (
     <div className="mb-6 px-2 text-sm text-muted-foreground">
       メッセージを送って会話を始めましょう
+    </div>
+  );
+}
+
+/** Above the composer while a turn is running and no text has arrived yet. */
+function ThinkingBar() {
+  return (
+    <div className="mx-2 mb-2 flex items-center gap-2 rounded-2xl border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+      <span className="size-2 animate-pulse rounded-full bg-sky-400" />
+      考え中…
     </div>
   );
 }
