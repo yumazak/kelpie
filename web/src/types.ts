@@ -106,7 +106,24 @@ export interface OcFormField {
   hidden?: boolean;
   when?: OcFormWhen[];
   type: string;
-  options?: Array<{ value?: string; label?: string }>;
+  options?: Array<{ value?: string; label?: string; description?: string }>;
+  /** A free-text answer is accepted alongside the options. */
+  custom?: boolean;
+  placeholder?: string;
+}
+
+/** The tool call a form belongs to (opencode ties them together). */
+export interface OcFormToolRef {
+  messageID?: string;
+  /** The id of the tool call; matches the tool part's `toolCallId`. */
+  id?: string;
+}
+
+export interface OcFormMetadata {
+  /** `"question"` when the form backs the `question` tool. */
+  kind?: string;
+  tool?: OcFormToolRef;
+  [key: string]: unknown;
 }
 
 /** A pending form (opencode v2's ask-the-user mechanism). */
@@ -114,6 +131,6 @@ export interface OcForm {
   id: string;
   sessionID: string;
   title?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: OcFormMetadata;
   fields: OcFormField[];
 }

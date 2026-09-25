@@ -86,6 +86,8 @@ export type ThreadComponents = {
   AssistantMessage?: ComponentType | undefined;
   Welcome?: ComponentType | undefined;
   ToolFallback?: ToolCallMessagePartComponent | undefined;
+  /** Per-tool-name overrides, which win over `toolUI` and `ToolFallback`. */
+  ToolByName?: Record<string, ToolCallMessagePartComponent> | undefined;
   ToolGroup?:
     | ComponentType<PropsWithChildren<{ group: ThreadGroupPart }>>
     | undefined;
@@ -124,6 +126,18 @@ const taskAwareGroupBy = (
     ? TASK_GROUP_PATH
     : path;
 };
+
+/** A question is answered in place, so it renders full width, ungrouped. */
+const isQuestion = (part: Parameters<typeof messageGroupBy>[0]) =>
+  part.type === "tool-call" && part.toolName === "question";
+
+const groupByWithQuestionStandalone: typeof messageGroupBy = (part, context) =>
+  isQuestion(part) ? [] : messageGroupBy(part, context);
+
+const taskAwareGroupByWithQuestionStandalone: typeof taskAwareGroupBy = (
+  part,
+  context,
+) => (isQuestion(part) ? [] : taskAwareGroupBy(part, context));
 
 export type ThreadProps = {
   components?: ThreadComponents | undefined;
@@ -474,11 +488,14 @@ const MessageError: FC = () => {
 const AssistantMessage: FC = () => {
   const {
     ToolFallback: ToolFallbackComponent = ToolFallback,
+    ToolByName,
     ToolGroup,
     ReasoningGroup,
     TaskGroup: TaskGroupComponent,
   } = useContext(ThreadComponentsContext);
-  const groupBy = TaskGroupComponent ? taskAwareGroupBy : messageGroupBy;
+  const groupBy = TaskGroupComponent
+    ? taskAwareGroupByWithQuestionStandalone
+    : groupByWithQuestionStandalone;
 
   const ACTION_BAR_PT = "pt-1.5";
   // Keep the action bar inside the contained root's paint box, then cancel its reserved space in flow.
@@ -536,8 +553,11 @@ const AssistantMessage: FC = () => {
                 return <MarkdownText />;
               case "reasoning":
                 return <Reasoning {...part} />;
-              case "tool-call":
+              case "tool-call": {
+                const Tool = ToolByName?.[part.toolName];
+                if (Tool) return <Tool {...part} />;
                 return part.toolUI ?? <ToolFallbackComponent {...part} />;
+              }
               case "data":
                 return part.dataRendererUI;
               case "file":

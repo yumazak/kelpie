@@ -8,6 +8,11 @@ import {
   ToolGroupTrigger,
 } from "@/components/assistant-ui/elements/tool-group.aui";
 import {
+  QuestionContext,
+  QuestionTool,
+  isQuestionForm,
+} from "@/components/assistant-ui/elements/question.aui";
+import {
   Thread,
   type ThreadGroupPart,
 } from "@/components/assistant-ui/elements/thread.aui";
@@ -16,6 +21,7 @@ import {
   fetchMessages,
   fetchPermissions,
   interruptSession,
+  replyForm,
   replyPermission,
   sendPrompt,
   type PromptFile,
@@ -42,6 +48,9 @@ const THINKING: ThreadMessageLike = {
   status: { type: "running" },
   content: [],
 };
+
+/** Per-tool renderers. A `question` is answered inline, not as a JSON card. */
+const KELPIE_TOOLS = { question: QuestionTool };
 
 function signature(messages: ThreadMessageLike[]): string {
   if (messages.length === 0) return "0";
@@ -178,10 +187,29 @@ export function Chat({
     [session.id, refreshDock, reload],
   );
 
+  const handleFormReply = useCallback(
+    async (formId: string, answer: Record<string, unknown>) => {
+      await replyForm(session.id, formId, answer);
+      await refreshDock();
+      void reload();
+    },
+    [session.id, refreshDock, reload],
+  );
+
   // The pending permissions ride along on the tool calls they gate.
   const withApprovals = useMemo(
     () => attachApprovals(messages, permissions),
     [messages, permissions],
+  );
+
+  // A question is rendered inline where it was asked; every other form docks.
+  const questionContext = useMemo(
+    () => ({ forms, onReply: handleFormReply }),
+    [forms, handleFormReply],
+  );
+  const dockForms = useMemo(
+    () => forms.filter((form) => !isQuestionForm(form)),
+    [forms],
   );
 
   const isRunning = running || session.active === true;
@@ -194,10 +222,10 @@ export function Chat({
   // The running indicator, the stop button and the permission approvals are
   // all assistant-ui's own; the dock is only for forms.
   const dock =
-    forms.length > 0 ? (
+    dockForms.length > 0 ? (
       <HarnessDock
         sessionId={session.id}
-        forms={forms}
+        forms={dockForms}
         onReplied={refreshDock}
       />
     ) : undefined;
@@ -237,10 +265,16 @@ export function Chat({
             onCancel={handleStop}
             onPermissionReply={handlePermissionReply}
           >
-            <Thread
-              components={{ Welcome, ToolGroup: KelpieToolGroup }}
-              dock={dock}
-            />
+            <QuestionContext.Provider value={questionContext}>
+              <Thread
+                components={{
+                  Welcome,
+                  ToolGroup: KelpieToolGroup,
+                  ToolByName: KELPIE_TOOLS,
+                }}
+                dock={dock}
+              />
+            </QuestionContext.Provider>
           </RuntimeProvider>
         )}
       </div>
