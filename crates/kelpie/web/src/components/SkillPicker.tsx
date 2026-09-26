@@ -82,7 +82,7 @@ export function SkillPickerButton() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="スキルを検索…"
-            className="placeholder:text-muted-foreground/60 w-full bg-transparent text-sm outline-none"
+            className="placeholder:text-muted-foreground/60 w-full bg-transparent text-base outline-none md:text-sm"
             aria-label="スキルを検索"
           />
         </label>
