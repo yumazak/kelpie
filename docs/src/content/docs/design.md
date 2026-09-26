@@ -11,7 +11,7 @@ description: How kelpie is designed around opencode v2, and why.
 | Question | Decision |
 | --- | --- |
 | Target | **opencode v2 only**. Not herdr, not any other harness |
-| Implementation | **Rust (bridge / CLI) + TypeScript (web)** |
+| Implementation | **Rust (bridge / CLI) + TypeScript (`crates/kelpie/web`)** |
 | Integration surface | opencode v2's **HTTP API + SSE** (no screen scraping, no log parsing, no keystrokes) |
 | UI | ChatGPT-style mobile GUI (assistant-ui). Dark, always |
 | Session list | **Across every project** (`GET /api/session`) |
@@ -49,7 +49,7 @@ also gone: opencode detects, owns and exposes the server itself.
         │  127.0.0.1:7180      kelpie binds loopback only
         ▼
    kelpie (Rust, one binary)
-     ├─ static PWA (web/dist) + JSON API
+     ├─ static PWA (crates/kelpie/web/dist) + JSON API
      ├─ opencode client : calls /api/* with Basic auth
      ├─ event bridge    : subscribes to GET /api/event (SSE) → relays to the browser
      ├─ push            : VAPID + subscription store + Web Push
@@ -118,8 +118,9 @@ The events that matter:
 
 ```bash
 cargo build --release
-cd web && pnpm install && pnpm build && cd ..
-./target/release/kelpie serve --port 7180 --static-dir "$PWD/web/dist"
+pnpm --dir crates/kelpie/web install
+pnpm --dir crates/kelpie/web build
+./target/release/kelpie serve --port 7180 --static-dir "$PWD/crates/kelpie/web/dist"
 ```
 
 - opencode has to be running (`opencode service start` / starting the TUI)

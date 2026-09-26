@@ -1,23 +1,35 @@
 ---
 title: Guide
-description: How kelpie is put together, how to run it, the CLI, and the macOS service.
+description: How kelpie is put together, how to install and run it, the CLI, and the macOS service.
 ---
 
 ## Layout
 
-- **Rust** (`crates/kelpie`, `crates/kelpie-cli`) … opencode client, SSE relay, Web Push
-- **TypeScript** (`web/`) … React + Vite + Tailwind + assistant-ui
+- **Rust** (`crates/kelpie`) … one crate: the opencode client, the SSE relay, Web Push and
+  the CLI
+- **TypeScript** (`crates/kelpie/web`) … React + Vite + Tailwind + assistant-ui
 
 ```
 phone (PWA) ── HTTPS ──▶ tailscale serve ──▶ kelpie (127.0.0.1) ──▶ opencode service
 ```
 
-## Running it
+## Install (macOS / Apple Silicon)
+
+Prebuilt binaries are attached to [GitHub Releases](https://github.com/yumazak/kelpie/releases).
+Installing through mise keeps them up to date too.
+
+```bash
+mise use -g github:yumazak/kelpie
+kelpie service install --port 7180
+```
+
+## Build and run from source
 
 ```bash
 cargo build --release
-cd web && pnpm install && pnpm build && cd ..
-./target/release/kelpie serve --port 7180 --static-dir "$PWD/web/dist"
+pnpm --dir crates/kelpie/web install
+pnpm --dir crates/kelpie/web build
+./target/release/kelpie serve --port 7180 --static-dir "$PWD/crates/kelpie/web/dist"
 ```
 
 - opencode must be running (`opencode` or `opencode service start`)
@@ -28,8 +40,8 @@ cd web && pnpm install && pnpm build && cd ..
 While developing, use the web dev server (it proxies `/api` to 7180):
 
 ```bash
-cargo run -p kelpie-cli -- serve --port 7180
-cd web && pnpm dev
+cargo run -p kelpie -- serve --port 7180
+pnpm --dir crates/kelpie/web dev
 ```
 
 ## Commands
@@ -67,8 +79,14 @@ kelpie service status
   `mise upgrade`
 - Remove it with `kelpie service uninstall`
 
+## Releases
+
+Pushing to `main` makes [release-plz](https://release-plz.dev) open and update a
+release PR; merging it creates the tag and the GitHub Release. See
+[`RELEASING.md`](https://github.com/yumazak/kelpie/blob/main/RELEASING.md) for details.
+
 ## Requirements
 
 - opencode v2 (`opencode service status` returns a URL)
 - Tailscale (published with `tailscale serve`)
-- Building: Rust 1.98+, pnpm 12 (web)
+- Building: Rust 1.98+, pnpm 12

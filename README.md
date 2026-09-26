@@ -17,14 +17,40 @@ Docs: <https://yumazak.github.io/kelpie/> (source in `docs/`)
 
 ```bash
 cargo build --release
-cd web && pnpm install && pnpm build && cd ..
-./target/release/kelpie serve --port 7180 --static-dir "$PWD/web/dist"
+pnpm --dir crates/kelpie/web install
+pnpm --dir crates/kelpie/web build
+./target/release/kelpie serve --port 7180 --static-dir "$PWD/crates/kelpie/web/dist"
 ```
 
 - opencode v2 must be running (`opencode` or `opencode service start`)
 - publish `127.0.0.1:7180` to your tailnet with `tailscale serve`
 - open it on your phone and tap “Enable notifications” (on iOS you have to add it to
   the home screen first)
+
+While developing, use the web dev server (it proxies `/api` to 7180):
+
+```bash
+cargo run -p kelpie -- serve --port 7180
+pnpm --dir crates/kelpie/web dev
+```
+
+## Install (macOS / Apple Silicon)
+
+Prebuilt binaries are attached to [GitHub Releases](https://github.com/yumazak/kelpie/releases).
+Installing through mise keeps them up to date too.
+
+```bash
+mise use -g github:yumazak/kelpie
+kelpie service install --port 7180
+```
+
+## Releases
+
+Pushing to `main` makes [release-plz](https://release-plz.dev) open and update a
+**release PR** (version + `CHANGELOG.md`). Merging that PR is the only thing that
+creates a tag and a GitHub Release, with the macOS binary attached.
+
+See [`RELEASING.md`](./RELEASING.md) for the details.
 
 The CLI, the macOS service and the design are in the [docs](https://yumazak.github.io/kelpie/).
 Requirements: opencode v2 / Tailscale / Rust 1.98+ and pnpm 12 to build.
