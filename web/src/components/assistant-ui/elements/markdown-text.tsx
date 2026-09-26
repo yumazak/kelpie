@@ -193,7 +193,7 @@ const defaultComponents = memoizeMarkdownComponents({
     <div className="aui-md-table-wrapper my-3 overflow-x-auto">
       <table
         className={cn(
-          "aui-md-table w-full border-separate border-spacing-0",
+          "aui-md-table w-full min-w-max border-separate border-spacing-0",
           className,
         )}
         {...props}
