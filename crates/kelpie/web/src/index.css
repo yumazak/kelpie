@@ -192,3 +192,37 @@ body {
 @custom-variant data-open (&:where([data-state="open"], [data-open]:not([data-open="false"])));
 
 @custom-variant data-closed (&:where([data-state="closed"], [data-closed]:not([data-closed="false"])));
+
+/* A route swap is a fade, not a cut.
+ *
+ * The router drives this with the View Transitions API (`defaultViewTransition`
+ * in `main.tsx`): one screen is snapshotted, the next is snapshotted, and the
+ * browser cross-fades between them instead of painting the new tree straight
+ * over the old one. Where the API is missing — anything before Safari 18 — the
+ * router skips it and the swap is instant, exactly as it was. */
+::view-transition-old(root) {
+  animation: 140ms ease-out both kelpie-vt-out;
+}
+
+::view-transition-new(root) {
+  animation: 180ms ease-in both kelpie-vt-in;
+}
+
+@keyframes kelpie-vt-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes kelpie-vt-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}

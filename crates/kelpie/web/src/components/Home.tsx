@@ -1,3 +1,4 @@
+import { useRouter } from "@tanstack/react-router";
 import {
   createContext,
   useContext,
@@ -387,10 +388,22 @@ function HomeThreadList({
 function KelpieThreadListItem() {
   const item = useAuiState((state) => state.threadListItem);
   const openMenu = useContext(MoreContext);
+  const router = useRouter();
   const row = (item.custom ?? {}) as Partial<Row>;
 
   return (
-    <ThreadListItemPrimitive.Root className="flex items-center gap-1 rounded-xl hover:bg-accent">
+    <ThreadListItemPrimitive.Root
+      className="flex items-center gap-1 rounded-xl hover:bg-accent"
+      // A finger on a row starts the download before the tap finishes, which is
+      // the whole of the wait on a cold cache: the session screen is the largest
+      // chunk the app has.
+      onPointerDown={() =>
+        void router.preloadRoute({
+          to: "/sessions/$sessionId",
+          params: { sessionId: item.id },
+        })
+      }
+    >
       <ThreadListItemPrimitive.Trigger className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-left">
         <span
           className={cn("size-2 shrink-0 rounded-full", dotClass(row))}
