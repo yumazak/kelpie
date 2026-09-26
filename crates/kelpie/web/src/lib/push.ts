@@ -78,3 +78,19 @@ export async function enablePush(): Promise<PushState> {
   });
   return "on";
 }
+
+/**
+ * Stop this device's subscription.
+ *
+ * There is no unsubscribe endpoint: the bridge forgets an endpoint when a push
+ * service rejects it (404/410), so leaving one behind costs a single failed
+ * send and then clears itself.
+ */
+export async function disablePush(): Promise<PushState> {
+  const registration = await navigator.serviceWorker.getRegistration();
+  if (registration) {
+    const subscription = await registration.pushManager.getSubscription();
+    await subscription?.unsubscribe();
+  }
+  return currentPushState();
+}
