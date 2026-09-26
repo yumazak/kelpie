@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.25](https://github.com/yumazak/kelpie/compare/v0.1.24...v0.1.25) - 2026-09-26
+
+### Fixed
+
+- *(web)* keep the thread at the real bottom and stop dropping message updates
+
 ## [0.1.24](https://github.com/yumazak/kelpie/compare/v0.1.23...v0.1.24) - 2026-09-26
 
 ### Added
