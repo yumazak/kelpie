@@ -80,11 +80,18 @@ export const messagesQuery = (id: string) =>
       const previous = queryClient.getQueryData<OcMessagesResponse>(
         messagesKey(id),
       );
-      const page = await fetchMessages(
-        id,
-        previous ? MESSAGES_POLL : MESSAGES_FULL,
-      );
-      return previous ? mergeMessages(previous, page) : page;
+      if (!previous || previous.data.length === 0) {
+        return fetchMessages(id, MESSAGES_FULL);
+      }
+      const page = await fetchMessages(id, MESSAGES_POLL);
+      const known = new Set(previous.data.map((message) => message.id));
+      // If the newest slice does not reach back into the history we already
+      // have, a burst added more messages than the slice covers. Taking the
+      // full list then is rare and cheap enough, and avoids showing a gap.
+      if (!page.data.some((message) => known.has(message.id))) {
+        return fetchMessages(id, MESSAGES_FULL);
+      }
+      return mergeMessages(previous, page);
     },
   });
 
