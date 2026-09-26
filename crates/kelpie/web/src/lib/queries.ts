@@ -15,6 +15,8 @@ import {
   fetchSessions,
   fetchSkills,
 } from "../api";
+import { queryClient } from "../query";
+import type { OcMessagesResponse } from "../types";
 
 export const sessionsKey = ["sessions"] as const;
 export const projectsKey = ["projects"] as const;
@@ -46,10 +48,44 @@ export const sessionQuery = (id: string) =>
     queryFn: () => fetchSession(id),
   });
 
+/** How much history to load when a session first opens, and how much to re-read
+ *  on every refresh. A full list is megabytes, so refreshes pull only the
+ *  newest slice and fold it over the history already in the cache. */
+const MESSAGES_FULL = 200;
+const MESSAGES_POLL = 25;
+
+/** Fold a freshly fetched newest slice over the history already cached:
+ *  refresh the messages present in both, append the new ones. */
+function mergeMessages(
+  previous: OcMessagesResponse,
+  page: OcMessagesResponse,
+): OcMessagesResponse {
+  const fresh = new Map(page.data.map((message) => [message.id, message]));
+  const updated = previous.data.map(
+    (message) => fresh.get(message.id) ?? message,
+  );
+  const seen = new Set(previous.data.map((message) => message.id));
+  const added = page.data.filter((message) => !seen.has(message.id));
+  return {
+    ...previous,
+    cursor: page.cursor ?? previous.cursor,
+    data: [...updated, ...added],
+  };
+}
+
 export const messagesQuery = (id: string) =>
   queryOptions({
     queryKey: messagesKey(id),
-    queryFn: () => fetchMessages(id),
+    queryFn: async () => {
+      const previous = queryClient.getQueryData<OcMessagesResponse>(
+        messagesKey(id),
+      );
+      const page = await fetchMessages(
+        id,
+        previous ? MESSAGES_POLL : MESSAGES_FULL,
+      );
+      return previous ? mergeMessages(previous, page) : page;
+    },
   });
 
 export const permissionsQuery = (id: string) =>

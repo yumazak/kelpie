@@ -502,12 +502,21 @@ async fn oc_events(
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
+#[derive(Debug, Deserialize)]
+struct MessagesQuery {
+    /// How many messages to return, newest first. The phone fetches a small
+    /// slice while it polls and the full history when it opens a session.
+    limit: Option<u32>,
+}
+
 async fn oc_messages(
     State(state): State<AppState>,
     Path(id): Path<String>,
+    Query(query): Query<MessagesQuery>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    let limit = query.limit.unwrap_or(200).clamp(1, 200);
     let client = state.opencode().await?;
-    Ok(Json(client.messages(&id, 200).await.map_err(oc_error)?))
+    Ok(Json(client.messages(&id, limit).await.map_err(oc_error)?))
 }
 
 /// One session, by id.

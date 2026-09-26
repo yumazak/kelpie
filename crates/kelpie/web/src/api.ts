@@ -45,10 +45,15 @@ export async function fetchSession(sessionId: string): Promise<OcSession> {
   return body.data;
 }
 
-/** One session's messages. */
-export function fetchMessages(sessionId: string): Promise<OcMessagesResponse> {
+/** One session's messages. `limit` fetches only the newest slice, which the
+ *  app merges over the history it already has. */
+export function fetchMessages(
+  sessionId: string,
+  limit?: number,
+): Promise<OcMessagesResponse> {
+  const query = limit ? `?limit=${limit}` : "";
   return getJson<OcMessagesResponse>(
-    `/api/sessions/${encodeURIComponent(sessionId)}/messages`,
+    `/api/sessions/${encodeURIComponent(sessionId)}/messages${query}`,
   );
 }
 
