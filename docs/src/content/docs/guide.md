@@ -1,18 +1,18 @@
 ---
-title: 使い方
-description: kelpie の構成、動かし方、コマンド、常駐化、要件。
+title: Guide
+description: How kelpie is put together, how to run it, the CLI, and the macOS service.
 ---
 
-## 構成
+## Layout
 
-- **Rust**（`crates/kelpie`, `crates/kelpie-cli`）… opencode クライアント、SSE 中継、Web Push
-- **TypeScript**（`web/`）… React + Vite + Tailwind + assistant-ui
+- **Rust** (`crates/kelpie`, `crates/kelpie-cli`) … opencode client, SSE relay, Web Push
+- **TypeScript** (`web/`) … React + Vite + Tailwind + assistant-ui
 
 ```
-スマホ (PWA) ── HTTPS ──▶ tailscale serve ──▶ kelpie (127.0.0.1) ──▶ opencode サービス
+phone (PWA) ── HTTPS ──▶ tailscale serve ──▶ kelpie (127.0.0.1) ──▶ opencode service
 ```
 
-## 動かす
+## Running it
 
 ```bash
 cargo build --release
@@ -20,31 +20,32 @@ cd web && pnpm install && pnpm build && cd ..
 ./target/release/kelpie serve --port 7180 --static-dir "$PWD/web/dist"
 ```
 
-- opencode のサービスが動いていること（`opencode` か `opencode service start`）
-- `tailscale serve` で `127.0.0.1:7180` を tailnet に公開
-- スマホで開き、「通知を有効にする」をタップ（iOS はホーム画面追加が必須）
+- opencode must be running (`opencode` or `opencode service start`)
+- publish `127.0.0.1:7180` to your tailnet with `tailscale serve`
+- open it on your phone and tap “Enable notifications” (on iOS you have to add it to
+  the home screen first)
 
-開発中は web の dev server を使う（`/api` は 7180 にプロキシ）:
+While developing, use the web dev server (it proxies `/api` to 7180):
 
 ```bash
 cargo run -p kelpie-cli -- serve --port 7180
 cd web && pnpm dev
 ```
 
-## コマンド
+## Commands
 
 ```bash
 kelpie serve [--port N] [--static-dir DIR]
-kelpie sessions [--limit N]      # 全プロジェクトのセッション
-kelpie messages <id> [--json]    # 会話
-kelpie push-test                 # テスト通知
-kelpie doctor                    # 環境診断（opencode 接続 / 通知 / state）
-kelpie service install           # 常駐化（macOS LaunchAgent）
+kelpie sessions [--limit N]      # sessions across every project
+kelpie messages <id> [--json]    # a conversation
+kelpie push-test                 # send a test notification
+kelpie doctor                    # diagnose the environment (opencode / push / state)
+kelpie service install           # run as a service (macOS LaunchAgent)
 kelpie service status
 kelpie service uninstall
 ```
 
-## 常駐化（macOS）
+## As a service (macOS)
 
 ```bash
 kelpie service install --port 7180
@@ -52,17 +53,22 @@ kelpie service restart
 kelpie service status
 ```
 
-- `~/Library/LaunchAgents/dev.kelpie.serve.plist` を書き、`launchctl bootstrap` で登録します
-- **ログイン時に自動起動**、落ちても launchd が再起動（KeepAlive）
-- **更新はゼロタッチ**: plist がバイナリを監視し、変わったら自分で再起動します（既定5分ごと、`KELPIE_RESTART_CHECK_SECS` で変更可）。`mise install` だけで最新に追従します
-- 明示的に入れ替えたいときは `kelpie service restart`
-- ログ: `~/.local/state/kelpie/serve.log`
-- `launchd` は環境が最小なので、plist に `PATH`（mise shims / Homebrew）を埋め込みます
-- mise で入れた場合は `latest` シンボリックリンクを指すので、`mise upgrade` に追従します
-- 外す: `kelpie service uninstall`
+- Writes `~/Library/LaunchAgents/dev.kelpie.serve.plist` and registers it with
+  `launchctl bootstrap`
+- **Starts at login**, and launchd restarts it if it dies (`KeepAlive`)
+- **Updates need no hands**: the plist watches the binary and restarts the service
+  when it changes (every 5 minutes by default, `KELPIE_RESTART_CHECK_SECS` to change
+  that). `mise install` is all it takes to move to a new build
+- Run `kelpie service restart` to swap in a build explicitly
+- Logs: `~/.local/state/kelpie/serve.log`
+- `launchd` runs with a minimal environment, so the plist embeds `PATH` (mise shims /
+  Homebrew)
+- Installed through mise it points at the `latest` symlink, so it follows
+  `mise upgrade`
+- Remove it with `kelpie service uninstall`
 
-## 要件
+## Requirements
 
-- opencode v2（`opencode service status` が URL を返すこと）
-- Tailscale（`tailscale serve` で公開）
-- ビルド: Rust 1.98+、pnpm 12（web）
+- opencode v2 (`opencode service status` returns a URL)
+- Tailscale (published with `tailscale serve`)
+- Building: Rust 1.98+, pnpm 12 (web)
