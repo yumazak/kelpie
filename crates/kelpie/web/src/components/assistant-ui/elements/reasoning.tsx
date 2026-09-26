@@ -72,9 +72,9 @@ function ReasoningRoot({
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
 
   const isControlled = controlledOpen !== undefined;
-  const isOpen = isControlled
-    ? controlledOpen
-    : (userOpen ?? (streaming || initialOpen));
+  // kelpie keeps the reasoning disclosure closed: it opens only when the reader
+  // asks. Streaming does not force it open.
+  const isOpen = isControlled ? controlledOpen : (userOpen ?? initialOpen);
   const isPreview = streaming === true && isOpen;
 
   const prevStreamingRef = useRef(streaming);
