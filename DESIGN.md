@@ -87,6 +87,10 @@ TUI 専用のハーネス（claude / codex / pi）は、画面を読んでキー
 - **HarnessDock**: composer の上に固定。
   - permission → 「許可 / 常に許可 / 拒否」
   - form → フィールド（string / number / boolean / multiselect）を描画
+- **スキル**: composer のピッカーから、そのセッションの directory に効くスキル
+  （`GET /api/skill`、`location[directory]` で絞る）を選び、次の送信に
+  `skills: [{ id }]` として添付する。選んだスキルは composer 上のチップに出す。
+  読み込みは `skill` メッセージとしてツールカードで見える（`convert.ts`）。
 
 ## 5. 通知
 

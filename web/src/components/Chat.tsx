@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { ThreadMessageLike } from "@assistant-ui/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -25,6 +25,10 @@ import {
   type PromptFile,
 } from "../api";
 import { useLiveMessage } from "../hooks/useLiveMessage";
+import {
+  ComposerSkillsContext,
+  type AttachedSkill,
+} from "../lib/composer-skills";
 import { attachApprovals, toThreadMessages } from "../lib/convert";
 import {
   formsKey,
@@ -38,6 +42,7 @@ import type { OcSession } from "../types";
 import { ErrorState } from "./ErrorState";
 import { HarnessDock } from "./HarnessDock";
 import { RuntimeProvider } from "./RuntimeProvider";
+import { SkillChips, SkillPickerButton } from "./SkillPicker";
 
 /** Fallback poll: the live event stream is primary; the stream also resyncs on
  *  (re)connect. This is only a slow watchdog for a stream that reported no
@@ -65,14 +70,6 @@ function signature(messages: ThreadMessageLike[]): string {
   return `${messages.length}:${JSON.stringify(last?.content).length}`;
 }
 
-/** The text of a message, for matching the optimistic bubble to the real one. */
-function textOf(message: ThreadMessageLike): string {
-  if (typeof message.content === "string") return message.content;
-  return message.content
-    .map((part) => (part.type === "text" ? part.text : ""))
-    .join("");
-}
-
 export function Chat({
   session,
   onBack,
@@ -81,8 +78,15 @@ export function Chat({
   onBack: () => void;
 }) {
   const queryClient = useQueryClient();
+  // Skills are scoped to the project, so the session's own directory picks them.
+  const directory = session.location?.directory ?? "";
   const [messages, setMessages] = useState<ThreadMessageLike[]>([]);
   const [optimistic, setOptimistic] = useState<ThreadMessageLike | null>(null);
+  const [attachedSkills, setAttachedSkills] = useState<AttachedSkill[]>([]);
+  // The message count when the optimistic bubble went up. Once the server's
+  // list grows past it, the real message has landed and the stand-in can go.
+  const optimisticAt = useRef<number | null>(null);
+  const messagesRef = useRef<ThreadMessageLike[]>([]);
 
   // The poll is only a fallback: the event stream is primary, and a landed
   // step invalidates these immediately. This catches a stream that went quiet
@@ -114,14 +118,19 @@ export function Chat({
     );
   }, [messagesResult.data]);
 
-  // The sent message is the server's now; drop the local stand-in.
   useEffect(() => {
-    setOptimistic((current) =>
-      current &&
-      messages.some((m) => m.role === "user" && textOf(m) === textOf(current))
-        ? null
-        : current,
-    );
+    messagesRef.current = messages;
+  }, [messages]);
+
+  // The sent message is the server's now; drop the local stand-in. Matching on
+  // the count, not the text, also clears it for a skill-only send, whose
+  // server-side text differs from what the composer showed.
+  useEffect(() => {
+    const at = optimisticAt.current;
+    if (at !== null && messages.length > at) {
+      optimisticAt.current = null;
+      setOptimistic(null);
+    }
   }, [messages]);
 
   const invalidateMessages = useCallback(
@@ -143,30 +152,52 @@ export function Chat({
     invalidateDock,
   );
 
+  // A skill is attached to the next message. The picker button and the chips
+  // read this through context; `handleNew` sends it as `skills: [{ id }]`.
+  const toggleSkill = useCallback((skill: AttachedSkill) => {
+    setAttachedSkills((current) =>
+      current.some((entry) => entry.id === skill.id)
+        ? current.filter((entry) => entry.id !== skill.id)
+        : [...current, skill],
+    );
+  }, []);
+  const attachedValue = useMemo(
+    () => ({ directory, skills: attachedSkills, toggle: toggleSkill }),
+    [directory, attachedSkills, toggleSkill],
+  );
+
   const handleNew = useCallback(
     async (text: string, files: PromptFile[]) => {
-      // Show the message at once, before the round trip lands.
-      const body = text || "（添付）";
+      // Show the message at once, before the round trip lands. The skill and
+      // attachment notes match how the server's copy renders them.
+      const notes = [
+        ...attachedSkills.map((skill) => `🧩 ${skill.name}`),
+        ...files.map((file) => `📎 ${file.name ?? "添付"}`),
+      ];
+      const body = [text, notes.join("\n")].filter(Boolean).join("\n");
       const local: ThreadMessageLike = {
         id: `local-${Date.now()}`,
         role: "user",
-        content: [
-          {
-            type: "text",
-            text: files.length > 0 ? `${body}\n📎 ${files.length}件` : body,
-          },
-        ],
+        content: [{ type: "text", text: body || "（添付）" }],
       };
       setOptimistic(local);
+      optimisticAt.current = messagesRef.current.length;
       try {
-        await sendPrompt(session.id, text, files);
+        await sendPrompt(
+          session.id,
+          text,
+          files,
+          attachedSkills.map((skill) => ({ id: skill.id })),
+        );
       } catch (sendError) {
         setOptimistic(null);
+        optimisticAt.current = null;
         throw sendError;
       }
+      setAttachedSkills([]);
       void invalidateMessages();
     },
-    [session.id, invalidateMessages],
+    [session.id, attachedSkills, invalidateMessages],
   );
 
   const handleStop = useCallback(async () => {
@@ -257,26 +288,30 @@ export function Chat({
         {error ? (
           <ErrorState detail={error} onRetry={() => void invalidateMessages()} />
         ) : (
-          <RuntimeProvider
-            messages={rendered}
-            isRunning={isRunning}
-            isLoading={loading}
-            onNew={handleNew}
-            onCancel={handleStop}
-            onPermissionReply={handlePermissionReply}
-          >
-            <QuestionContext.Provider value={questionContext}>
-              <Thread
-                components={{
-                  Welcome,
-                  ToolGroup: KelpieToolGroup,
-                  ToolByName: KELPIE_TOOLS,
-                }}
-                dock={dock}
-                autoFocus={false}
-              />
-            </QuestionContext.Provider>
-          </RuntimeProvider>
+          <ComposerSkillsContext.Provider value={attachedValue}>
+            <RuntimeProvider
+              messages={rendered}
+              isRunning={isRunning}
+              isLoading={loading}
+              onNew={handleNew}
+              onCancel={handleStop}
+              onPermissionReply={handlePermissionReply}
+            >
+              <QuestionContext.Provider value={questionContext}>
+                <Thread
+                  components={{
+                    Welcome,
+                    ComposerHeader: SkillChips,
+                    ComposerTools: SkillPickerButton,
+                    ToolGroup: KelpieToolGroup,
+                    ToolByName: KELPIE_TOOLS,
+                  }}
+                  dock={dock}
+                  autoFocus={false}
+                />
+              </QuestionContext.Provider>
+            </RuntimeProvider>
+          </ComposerSkillsContext.Provider>
         )}
       </div>
     </div>

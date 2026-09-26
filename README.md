@@ -7,6 +7,7 @@
 - ChatGPT 風のモバイルチャット GUI（[assistant-ui](https://www.assistant-ui.com/)、ダーク固定）
 - **トークン単位のストリーミング**（opencode の SSE を中継）
 - **権限 / 質問をスマホから回答**（permission の許可・拒否、form の入力）
+- **スキルを composer から選んで添付**（opencode の `GET /api/skill`、`prompt` の `skills`）
 - **Web Push 通知**（許可待ち / 質問 / 完了）
 - opencode v2 の **HTTP API だけ**を使う。画面スクレイプ・ログ解析・キー送信なし
 

@@ -105,6 +105,12 @@ impl OpencodeClient {
         if let Some(body) = body {
             request = request.json(&body);
         }
+        self.send_json(request).await
+    }
+
+    /// Send a prepared request and decode the JSON body. Split from `json` so
+    /// the query-string calls (`skills`) can build their own request.
+    async fn send_json(&self, request: reqwest::RequestBuilder) -> Result<Value, OpencodeError> {
         let response = request.send().await?;
         let status = response.status();
         let text = response.text().await?;
@@ -209,18 +215,38 @@ impl OpencodeClient {
             .map(str::to_string)
     }
 
+    /// Every skill registered for `directory` (a project). The service searches
+    /// from that directory up to the project root, so a session's own location
+    /// is the right scope; without one its default location is used.
+    ///
+    /// opencode takes the scope as a `location[directory]` deepObject query
+    /// parameter; `reqwest` percent-encodes the brackets, which the service
+    /// accepts.
+    pub async fn skills(&self, directory: Option<&str>) -> Result<Value, OpencodeError> {
+        let mut request = self.request(reqwest::Method::GET, "/api/skill");
+        if let Some(directory) = directory {
+            request = request.query(&[("location[directory]", directory)]);
+        }
+        self.send_json(request).await
+    }
+
     /// Send a prompt to a session. `files` are opencode `FileAttachment`s:
     /// `{ uri, name?, description? }`, where `uri` is a `file://` URL or a
-    /// `data:` URL.
+    /// `data:` URL. `skills` are `Prompt.SkillAttachment`s (`{ id }`); the
+    /// service inlines each skill's body into the turn.
     pub async fn prompt(
         &self,
         session_id: &str,
         text: &str,
         files: &[Value],
+        skills: &[Value],
     ) -> Result<Value, OpencodeError> {
         let mut body = serde_json::json!({ "text": text });
         if !files.is_empty() {
             body["files"] = Value::Array(files.to_vec());
+        }
+        if !skills.is_empty() {
+            body["skills"] = Value::Array(skills.to_vec());
         }
         self.json(
             reqwest::Method::POST,

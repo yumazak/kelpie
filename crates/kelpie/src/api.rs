@@ -94,6 +94,7 @@ impl AppState {
 pub fn router(state: AppState, static_dir: Option<PathBuf>) -> Router {
     let app = Router::new()
         .route("/api/sessions", get(oc_sessions))
+        .route("/api/skills", get(oc_skills))
         .route("/api/events", get(oc_events))
         .route("/api/sessions/{id}/messages", get(oc_messages))
         .route(
@@ -271,6 +272,30 @@ async fn oc_sessions(
     })))
 }
 
+/// The directory a session runs in. Skills are scoped to it, so the client
+/// passes the session's `location.directory`; without one the service falls
+/// back to its own default location.
+#[derive(Debug, Deserialize)]
+struct SkillsQuery {
+    directory: Option<String>,
+}
+
+/// The skills registered for a project, so the composer can offer them. Each
+/// item is opencode's `Skill.Info`; the client only needs `id`, `name`, and
+/// `description`.
+async fn oc_skills(
+    State(state): State<AppState>,
+    Query(query): Query<SkillsQuery>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let client = state.opencode().await?;
+    Ok(Json(
+        client
+            .skills(query.directory.as_deref())
+            .await
+            .map_err(oc_error)?,
+    ))
+}
+
 /// Server-sent events, forwarded from the opencode service. `?session=` narrows
 /// to one session; without it every event is forwarded.
 #[derive(Debug, Deserialize)]
@@ -333,6 +358,9 @@ struct PromptBody {
     /// opencode `FileAttachment`s (`{ uri, name? }`).
     #[serde(default)]
     files: Vec<serde_json::Value>,
+    /// opencode `Prompt.SkillAttachment`s (`{ id }`).
+    #[serde(default)]
+    skills: Vec<serde_json::Value>,
 }
 
 async fn oc_prompt(
@@ -343,7 +371,7 @@ async fn oc_prompt(
     let client = state.opencode().await?;
     Ok(Json(
         client
-            .prompt(&id, &body.text, &body.files)
+            .prompt(&id, &body.text, &body.files, &body.skills)
             .await
             .map_err(oc_error)?,
     ))
