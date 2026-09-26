@@ -6,8 +6,7 @@
 //! module is empty.
 
 #[cfg(has_web)]
-static WEB: include_dir::Dir<'static> =
-    include_dir::include_dir!("$CARGO_MANIFEST_DIR/../../web/dist");
+static WEB: include_dir::Dir<'static> = include_dir::include_dir!("$CARGO_MANIFEST_DIR/web/dist");
 
 /// Serve a path from the embedded PWA, falling back to `index.html` so the
 /// client-side routes resolve.

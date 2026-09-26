@@ -1,0 +1,25 @@
+# release-plz — https://release-plz.dev
+#
+# Every push to `main` opens (or updates) one release PR that bumps the
+# workspace version and appends to `CHANGELOG.md`. Merging that PR is what
+# creates the `vX.Y.Z` tag and the GitHub Release; the `release` workflow then
+# attaches the macOS binary. Nothing is published to crates.io.
+
+[workspace]
+# The project is not on crates.io, so determine the current version from git
+# tags instead of the registry.
+git_only = true
+# There is no library API to keep stable.
+semver_check = false
+# Release only when the release PR is merged, never on a plain push to `main`.
+release_always = false
+# One `vX.Y.Z` tag for the whole project. This is also the tag the mise
+# `github:yumazak/kelpie` backend resolves, so do not change the pattern.
+git_tag_name = "v{{ version }}"
+git_release_name = "v{{ version }}"
+git_release_body = "{{ changelog }}"
+
+[[package]]
+name = "kelpie"
+# Keep the changelog at the repository root rather than inside the crate.
+changelog_path = "CHANGELOG.md"

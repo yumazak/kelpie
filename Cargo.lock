@@ -1693,8 +1693,10 @@ dependencies = [
 name = "kelpie"
 version = "0.1.20"
 dependencies = [
+ "anyhow",
  "axum",
  "base64 0.23.1",
+ "clap",
  "getrandom 0.4.3",
  "include_dir",
  "mime_guess",
@@ -1707,20 +1709,8 @@ dependencies = [
  "tokio-stream",
  "tower-http 0.7.1",
  "tracing",
- "web-push",
-]
-
-[[package]]
-name = "kelpie-cli"
-version = "0.1.20"
-dependencies = [
- "anyhow",
- "clap",
- "kelpie",
- "serde_json",
- "tokio",
- "tracing",
  "tracing-subscriber",
+ "web-push",
 ]
 
 [[package]]
@@ -2411,6 +2401,7 @@ dependencies = [
  "rustls-platform-verifier",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "sync_wrapper",
  "tokio",
  "tokio-rustls",

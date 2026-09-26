@@ -48,7 +48,7 @@ TUI 専用のハーネス（claude / codex / pi）は、画面を読んでキー
         │  127.0.0.1:7180      kelpie は loopback のみ bind
         ▼
    kelpie (Rust, 単一バイナリ)
-     ├─ 静的 PWA (web/dist) + JSON API
+     ├─ 静的 PWA (crates/kelpie/web/dist) + JSON API
      ├─ opencode client : Basic 認証で /api/* を叩く
      ├─ event bridge    : GET /api/event (SSE) を常時購読 → ブラウザへ中継
      ├─ push            : VAPID + 購読ストア + Web Push
@@ -108,8 +108,9 @@ TUI 専用のハーネス（claude / codex / pi）は、画面を読んでキー
 
 ```bash
 cargo build --release
-cd web && pnpm install && pnpm build && cd ..
-./target/release/kelpie serve --port 7180 --static-dir "$PWD/web/dist"
+pnpm --dir crates/kelpie/web install
+pnpm --dir crates/kelpie/web build
+./target/release/kelpie serve --port 7180 --static-dir "$PWD/crates/kelpie/web/dist"
 ```
 
 - opencode のサービスが動いていること（`opencode service start` / TUI 起動）
