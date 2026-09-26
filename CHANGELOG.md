@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.26](https://github.com/yumazak/kelpie/compare/v0.1.25...v0.1.26) - 2026-09-26
+
+### Added
+
+- *(web)* page message history and drop the polling fallback
+
+### Fixed
+
+- *(web)* avoid a message gap when a burst outruns the newest slice
+- *(web)* keep the 考え中 indicator visible while a turn runs
+
+### Other
+
+- *(web)* fetch only the newest slice when a session refreshes
+- *(kelpie)* stop shipping message snapshots; set cache headers
+
 ## [0.1.25](https://github.com/yumazak/kelpie/compare/v0.1.24...v0.1.25) - 2026-09-26
 
 ### Fixed
