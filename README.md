@@ -5,6 +5,9 @@
 Drive an [opencode](https://opencode.ai) server from your phone as a chat app, over Tailscale.
 Named after the Australian Kelpie (a dog).
 
+Its concept and UI are heavily inspired by [collie](https://github.com/AltanS/collie) — an
+earlier take on the same problem, driving coding agents over a tailnet.
+
 - **Every project in one list** with read/unread and waiting confirmations at a glance, a
   ChatGPT-style mobile GUI, token-by-token streaming
 - **Answer permissions and questions from your phone**, plus **Web Push notifications**
@@ -55,3 +58,8 @@ See [`RELEASING.md`](./RELEASING.md) for the details.
 
 The CLI, the macOS service and the design are in the [docs](https://yumazak.github.io/kelpie/).
 Requirements: opencode v2 / Tailscale / Rust 1.98+ and pnpm 12 to build.
+
+## Credits
+
+- [collie](https://github.com/AltanS/collie) — a mobile PWA for driving coding agents over a
+  tailnet. kelpie's concept, its UI and the mark's design are heavily influenced by it.

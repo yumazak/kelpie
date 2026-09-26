@@ -27,6 +27,47 @@ export default defineConfig({
 			},
 			logo: { src: './src/assets/kelpie.svg', alt: 'kelpie' },
 			favicon: '/favicon.svg',
+			// `favicon` above is Starlight's own knob and gets `base` for free;
+			// these tags are emitted verbatim, so they spell `base` themselves.
+			head: [
+				{
+					tag: 'link',
+					attrs: {
+						rel: 'icon',
+						type: 'image/png',
+						sizes: '96x96',
+						href: `${base}/favicon-96x96.png`,
+					},
+				},
+				{
+					tag: 'link',
+					attrs: {
+						rel: 'apple-touch-icon',
+						sizes: '180x180',
+						href: `${base}/apple-touch-icon.png`,
+					},
+				},
+				{
+					tag: 'link',
+					attrs: { rel: 'manifest', href: `${base}/site.webmanifest` },
+				},
+				{
+					tag: 'meta',
+					attrs: {
+						property: 'og:image',
+						content: `${site}${base}/social-card.png`,
+					},
+				},
+				{ tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
+				{ tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
+				{
+					tag: 'meta',
+					attrs: {
+						name: 'twitter:image',
+						content: `${site}${base}/social-card.png`,
+					},
+				},
+			],
 			social: [
 				{
 					icon: 'github',

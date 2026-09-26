@@ -23,6 +23,7 @@ self.addEventListener("push", (event) => {
     body: data.body || "",
     tag: data.tag || "kelpie",
     renotify: true,
+    icon: "/notification-icon-192x192.png",
     data: { sessionId: data.session_id || null },
   };
   event.waitUntil(self.registration.showNotification(title, options));
