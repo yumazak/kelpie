@@ -44,6 +44,13 @@ files = "^crates/kelpie/web/src/routes/|^crates/kelpie/web/src/routeTree\\.gen\\
 pass_filenames = false
 
 [[repos.hooks]]
+id = "no-tracked-generated"
+name = "generated trees are not tracked (node_modules / dist)"
+entry = "sh -c \"! git ls-files | grep -Eq '(^|/)(node_modules|dist)/'\""
+language = "system"
+pass_filenames = false
+
+[[repos.hooks]]
 id = "cargo-fmt"
 name = "cargo fmt"
 entry = "cargo fmt --all -- --check"
