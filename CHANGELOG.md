@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.28](https://github.com/yumazak/kelpie/compare/v0.1.27...v0.1.28) - 2026-09-26
+
+### Added
+
+- 設定ページを追加し、通知をヘッダーから移す
+
+### Changed
+
+- 画面遷移にフェード・先読み・pending 表示を入れる
+
+### Fixed
+
+- *(web)* resync on foreground so a notification tap shows the latest
+
 ## [0.1.27](https://github.com/yumazak/kelpie/compare/v0.1.26...v0.1.27) - 2026-09-26
 
 ### Fixed
