@@ -255,6 +255,7 @@ const ThreadRoot: FC<{
             <ThreadScrollToBottom />
             <ThreadFollowupSuggestions />
             {dock}
+            <QueuedMessages />
             <Composer autoFocus={autoFocus} />
             <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
               <ThreadSuggestions />
@@ -417,6 +418,27 @@ const ThreadSuggestionItem: FC = () => {
   );
 };
 
+/** Messages composed while a turn was running, waiting their turn. */
+const QueuedMessages: FC = () => {
+  const queue = useAuiState((s) => s.composer.queue);
+  if (queue.length === 0) return null;
+  return (
+    <div data-slot="aui_composer-queue" className="flex flex-col gap-1">
+      <div className="px-2 text-xs text-muted-foreground">送信待ち</div>
+      {queue.map((item) => (
+        <div
+          key={item.id}
+          className="rounded-(--composer-radius) border border-border bg-muted/40 px-3 py-2 text-sm wrap-break-word"
+        >
+          {item.parts
+            .flatMap((part) => (part.type === "text" ? [part.text] : []))
+            .join("\n")}
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
   return (
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
@@ -452,9 +474,7 @@ const ComposerAction: FC = () => {
         </AuiIf>
         <AuiIf
           condition={(s) =>
-            !s.composer.canCancel ||
-            (s.thread.voice !== undefined &&
-              false)
+            !s.composer.canCancel || s.thread.capabilities.queue
           }
         >
           <ComposerPrimitive.Send render={<TooltipIconButton tooltip="Send message" side="bottom" type="button" variant="default" size="icon" className="aui-composer-send size-7 rounded-full" aria-label="Send message" />}><ArrowUpIcon className="aui-composer-send-icon size-4" /></ComposerPrimitive.Send>

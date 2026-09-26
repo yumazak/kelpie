@@ -3,12 +3,13 @@ import {
   CompositeAttachmentAdapter,
   SimpleImageAttachmentAdapter,
   SimpleTextAttachmentAdapter,
+  createMessageQueue,
   useExternalStoreRuntime,
   type AppendMessage,
   type CompleteAttachment,
   type ThreadMessageLike,
 } from "@assistant-ui/react";
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, type ReactNode } from "react";
 
 import type { PromptFile } from "../api";
 
@@ -72,6 +73,43 @@ export function RuntimeProvider({
   ) => Promise<void>;
   children: ReactNode;
 }) {
+  // Both the plain send and the queued send funnel through here.
+  const sendAppend = useCallback(
+    async (message: AppendMessage) => {
+      const text = message.content
+        .map((part) => (part.type === "text" ? part.text : ""))
+        .filter(Boolean)
+        .join("\n");
+      const files = filesFromAttachments(message.attachments);
+      if (!text.trim() && files.length === 0) return;
+      await onNew(text, files);
+    },
+    [onNew],
+  );
+
+  // A message composed while a turn is still running goes straight to the
+  // session — opencode queues / steers it — instead of the composer blocking.
+  // `createMessageQueue` is assistant-ui's opt-in for keeping it usable.
+  const queue = useMemo(
+    () =>
+      createMessageQueue({
+        run: (message) => {
+          void sendAppend(message);
+        },
+        cancel: () => {
+          void onCancel();
+        },
+      }),
+    [sendAppend, onCancel],
+  );
+
+  // Drive the queue's busy/idle edges: while a turn runs, a composed message is
+  // held and shown as pending; it dispatches when the turn ends.
+  useEffect(() => {
+    if (isRunning) queue.notifyBusy();
+    else queue.notifyIdle();
+  }, [isRunning, queue]);
+
   const runtime = useExternalStoreRuntime<ThreadMessageLike>({
     // While a turn is in flight, assistant-ui swaps the composer's send button
     // for its own cancel button and emits a "thinking" indicator part.
@@ -100,15 +138,10 @@ export function RuntimeProvider({
         new SimpleTextAttachmentAdapter(),
       ]),
     },
-    onNew: async (message: AppendMessage) => {
-      const text = message.content
-        .map((part) => (part.type === "text" ? part.text : ""))
-        .filter(Boolean)
-        .join("\n");
-      const files = filesFromAttachments(message.attachments);
-      if (!text.trim() && files.length === 0) return;
-      await onNew(text, files);
-    },
+    // Keep the composer usable during a run: a submitted message goes to the
+    // session through the queue instead of being blocked.
+    queue: queue.adapter,
+    onNew: sendAppend,
   });
 
   return (
