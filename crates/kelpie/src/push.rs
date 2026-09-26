@@ -10,8 +10,8 @@ use std::sync::Mutex;
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use p256::elliptic_curve::sec1::ToEncodedPoint;
-use rand_core::OsRng;
+use p256::elliptic_curve::Generate;
+use p256::elliptic_curve::sec1::ToSec1Point;
 use serde::{Deserialize, Serialize};
 
 /// A device's push subscription, as the browser reports it.
@@ -137,15 +137,15 @@ pub fn state_dir() -> Option<PathBuf> {
 /// A fresh P-256 private scalar, base64url-no-padding (the format `web-push`
 /// wants).
 fn generate_vapid_private() -> Option<String> {
-    let secret = p256::SecretKey::random(&mut OsRng);
+    let secret = p256::SecretKey::try_generate_from_rng(&mut getrandom::SysRng).ok()?;
     Some(URL_SAFE_NO_PAD.encode(secret.to_bytes()))
 }
 
 /// The uncompressed public point for a private scalar.
 fn public_from_private(private: &str) -> Option<String> {
     let bytes = URL_SAFE_NO_PAD.decode(private).ok()?;
-    let secret = p256::SecretKey::from_bytes(bytes.as_slice().into()).ok()?;
-    let point = secret.public_key().to_encoded_point(false);
+    let secret = p256::SecretKey::from_slice(bytes.as_slice()).ok()?;
+    let point = secret.public_key().to_sec1_point(false);
     Some(URL_SAFE_NO_PAD.encode(point.as_bytes()))
 }
 
