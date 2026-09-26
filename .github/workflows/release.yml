@@ -33,7 +33,7 @@ jobs:
         with:
           command: release-pr
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
 
   # Release only when the release PR is merged (`release_always = false` in
   # release-plz.toml). Creates the `vX.Y.Z` tag and the GitHub Release.
@@ -57,7 +57,7 @@ jobs:
         with:
           command: release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
 
   # Attach the binary to the release release-plz just created.
   build-macos:

@@ -1,0 +1,57 @@
+name: Bug report
+description: Report something that is broken
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! Security issues should go through
+        [private reporting](https://github.com/yumazak/kelpie/security/advisories/new) instead.
+  - type: input
+    id: version
+    attributes:
+      label: kelpie version
+      description: The output of `kelpie --version`
+      placeholder: "0.1.21"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: e.g. `~/.local/state/kelpie/serve.log`
+      render: shell
+    validations:
+      required: false
