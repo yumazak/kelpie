@@ -153,7 +153,7 @@ export function Home({
     setPendingDelete(state.sessions.find((session) => session.id === id) ?? null);
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-5">
+    <div className="mx-auto h-full max-w-2xl overflow-y-auto px-4 py-5">
       <header className="mb-4 flex items-center justify-between">
         <div className="text-lg font-semibold">kelpie</div>
         <div className="text-xs text-muted-foreground">opencode</div>
