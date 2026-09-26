@@ -10,8 +10,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::extract::{Path, Query, Request, State};
+use axum::http::{HeaderValue, StatusCode, header};
+use axum::middleware::{self, Next};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -121,14 +122,33 @@ pub fn router(state: AppState, static_dir: Option<PathBuf>) -> Router {
         .route("/api/push/test", post(push_test))
         .with_state(state);
 
-    if let Some(dir) = static_dir {
+    let app = if let Some(dir) = static_dir {
         let index = dir.join("index.html");
-        return app.fallback_service(
+        app.fallback_service(
             tower_http::services::ServeDir::new(dir)
                 .fallback(tower_http::services::ServeFile::new(index)),
-        );
+        )
+    } else {
+        serve_embedded(app)
+    };
+
+    // API responses must never be cached. The phone re-reads them constantly,
+    // and Safari otherwise serves a stale copy — the session list would look
+    // current while an opened session showed older messages. Static assets are
+    // handled separately in `web.rs`.
+    app.layer(middleware::from_fn(no_store_api))
+}
+
+/// Mark every `/api/*` response `no-store`, so no browser caches live data.
+async fn no_store_api(request: Request, next: Next) -> Response {
+    let is_api = request.uri().path().starts_with("/api/");
+    let mut response = next.run(request).await;
+    if is_api {
+        response
+            .headers_mut()
+            .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     }
-    serve_embedded(app)
+    response
 }
 
 /// Attach the embedded PWA when the build has one.

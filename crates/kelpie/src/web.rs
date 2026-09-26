@@ -38,6 +38,17 @@ fn response(path: &str, bytes: &'static [u8]) -> axum::response::Response {
         HeaderValue::from_str(mime.as_ref())
             .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream")),
     );
+    // Vite fingerprints everything under `assets/`, so it can be cached
+    // forever; the shell (`index.html`, `sw.js`, manifest) must revalidate so a
+    // new release lands on the next load.
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        if path.starts_with("assets/") {
+            HeaderValue::from_static("public, max-age=31536000, immutable")
+        } else {
+            HeaderValue::from_static("no-cache")
+        },
+    );
     let _ = StatusCode::OK;
     response
 }

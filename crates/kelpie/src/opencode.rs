@@ -178,6 +178,15 @@ impl OpencodeClient {
             .await?;
         if let Some(data) = value.get_mut("data").and_then(|data| data.as_array_mut()) {
             data.reverse();
+            // Each assistant message carries a git `snapshot`: the working-tree
+            // file list at that turn, which can be megabytes (a `web/dist`
+            // build alone blows it up). The phone never renders it, so drop it
+            // before it crosses the wire.
+            for message in data.iter_mut() {
+                if let Some(object) = message.as_object_mut() {
+                    object.remove("snapshot");
+                }
+            }
         }
         Ok(value)
     }
