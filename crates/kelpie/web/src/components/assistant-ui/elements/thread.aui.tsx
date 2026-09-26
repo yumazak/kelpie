@@ -231,12 +231,26 @@ const ThreadRoot: FC<{
   // to the content already on screen, so prepending does not move the reader.
   const handleScroll = (event: UIEvent<HTMLDivElement>) => {
     if (!onLoadOlder || loadingOlder.current || noMoreOlder.current) return;
-    if (event.currentTarget.scrollTop > 80) return;
+    const el = event.currentTarget;
+    if (el.scrollTop > 80) return;
     loadingOlder.current = true;
     setOlderPending(true);
+    const before = el.scrollHeight;
+    const top = el.scrollTop;
     void onLoadOlder()
       .then((more) => {
         if (!more) noMoreOlder.current = true;
+        // Older messages were prepended above the viewport. Grow scrollTop by
+        // the height they added, so the reader stays on the message they were
+        // looking at; otherwise they stay pinned to the very top and every
+        // scroll event pulls another page. The jump is instant, not smooth.
+        const grew = el.scrollHeight - before;
+        if (grew > 0) {
+          const behavior = el.style.scrollBehavior;
+          el.style.scrollBehavior = "auto";
+          el.scrollTop = top + grew;
+          el.style.scrollBehavior = behavior;
+        }
       })
       .finally(() => {
         loadingOlder.current = false;
