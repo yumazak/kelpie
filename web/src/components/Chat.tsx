@@ -273,6 +273,7 @@ export function Chat({
                   ToolByName: KELPIE_TOOLS,
                 }}
                 dock={dock}
+                autoFocus={false}
               />
             </QuestionContext.Provider>
           </RuntimeProvider>
