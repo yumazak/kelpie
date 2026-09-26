@@ -1,0 +1,8 @@
+# pnpm 12 reads its settings from here, not from `package.json` / `.npmrc`.
+#
+# Astro depends on `esbuild`, which installs a platform binary from an install
+# script. pnpm leaves that script unreviewed by default and refuses the whole
+# install (`ERR_PNPM_IGNORED_BUILDS`), so it is approved explicitly — and only
+# it. Everything else that wants to run a script has to be listed here too.
+allowBuilds:
+  esbuild: true
