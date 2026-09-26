@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.23](https://github.com/yumazak/kelpie/compare/v0.1.22...v0.1.23) - 2026-09-26
+
+### Added
+
+- セッション一覧に未読と確認待ちを表示する
+
+### Other
+
+- Merge pull request #13 from yumazak/feature/mark-read
+
 ## [0.1.22](https://github.com/yumazak/kelpie/compare/v0.1.21...v0.1.22) - 2026-09-26
 
 ### Added
