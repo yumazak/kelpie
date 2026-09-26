@@ -1,5 +1,30 @@
-/* The docs share the PWA's typeface (`web/src/index.css`). Everything else is
-   Starlight's own theme, whose neutral palette already matches the app. */
+/* The docs share the PWA's typeface (`crates/kelpie/web/src/index.css`) and the
+   icon's palette.
+
+   Starlight's own variables live inside `@layer starlight.base`, and an
+   *unlayered* rule beats every layered one whatever the specificity — so a bare
+   `:root` override would also clobber `:root[data-theme='light']` and leave the
+   light theme showing dark colours. Excluding that one selector keeps the
+   override to the dark theme (the default, which carries no attribute until
+   Starlight's script sets one) and leaves light mode exactly as shipped.
+
+   The ramp runs between the icon's own two colours — its canvas `#0b0b0d` and
+   its paper `#f2f2f0` — with the icon's tile `#17171c` on the navigation
+   surface, so the site and the mark are the same picture. The accent (links,
+   active nav) is deliberately Starlight's. */
 :root {
 	--sl-font: 'Geist Variable', system-ui, sans-serif;
+}
+
+:root:not([data-theme='light']) {
+	--sl-color-black: #0b0b0d; /* the page */
+	--sl-color-gray-6: #17171c; /* nav, sidebar, hairlines */
+	--sl-color-gray-5: #26262b; /* inline code, the raised surface */
+	--sl-color-gray-4: #5e5e62;
+	--sl-color-gray-3: #8f8f91;
+	--sl-color-gray-2: #bbbbbc; /* body text */
+	--sl-color-gray-1: #d6d6d5;
+	--sl-color-white: #f2f2f0; /* the brightest: the icon's paper */
+
+	--sl-color-backdrop-overlay: rgb(11 11 13 / 0.66);
 }
