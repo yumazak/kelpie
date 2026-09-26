@@ -11,7 +11,7 @@ description: opencode v2 を一クライアントとして使うときの設計�
 | 論点 | 決定 |
 | --- | --- |
 | 対象 | **opencode v2 専用**。herdr も他ハーネスも使わない |
-| 実装 | **Rust（bridge / CLI）+ TypeScript（web）** |
+| 実装 | **Rust（bridge / CLI）+ TypeScript（`crates/kelpie/web`）** |
 | 統合面 | opencode v2 の **HTTP API + SSE**（画面スクレイプ・ログ解析・キー送信なし） |
 | UI | ChatGPT 風モバイル GUI（assistant-ui）。ダーク固定 |
 | 一覧 | **全プロジェクト横断**（`GET /api/session`） |
@@ -48,7 +48,7 @@ TUI 専用のハーネス（claude / codex / pi）は、画面を読んでキー
         │  127.0.0.1:7180      kelpie は loopback のみ bind
         ▼
    kelpie (Rust, 単一バイナリ)
-     ├─ 静的 PWA (web/dist) + JSON API
+     ├─ 静的 PWA (crates/kelpie/web/dist) + JSON API
      ├─ opencode client : Basic 認証で /api/* を叩く
      ├─ event bridge    : GET /api/event (SSE) を常時購読 → ブラウザへ中継
      ├─ push            : VAPID + 購読ストア + Web Push
@@ -108,8 +108,9 @@ TUI 専用のハーネス（claude / codex / pi）は、画面を読んでキー
 
 ```bash
 cargo build --release
-cd web && pnpm install && pnpm build && cd ..
-./target/release/kelpie serve --port 7180 --static-dir "$PWD/web/dist"
+pnpm --dir crates/kelpie/web install
+pnpm --dir crates/kelpie/web build
+./target/release/kelpie serve --port 7180 --static-dir "$PWD/crates/kelpie/web/dist"
 ```
 
 - opencode のサービスが動いていること（`opencode service start` / TUI 起動）

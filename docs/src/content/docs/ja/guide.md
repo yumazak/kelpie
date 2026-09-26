@@ -1,23 +1,33 @@
 ---
 title: 使い方
-description: kelpie の構成、動かし方、コマンド、常駐化、要件。
+description: kelpie の構成、インストール、動かし方、コマンド、常駐化、要件。
 ---
 
 ## 構成
 
-- **Rust**（`crates/kelpie`, `crates/kelpie-cli`）… opencode クライアント、SSE 中継、Web Push
-- **TypeScript**（`web/`）… React + Vite + Tailwind + assistant-ui
+- **Rust**（`crates/kelpie`）… 1クレート。opencode クライアント、SSE 中継、Web Push、CLI
+- **TypeScript**（`crates/kelpie/web`）… React + Vite + Tailwind + assistant-ui
 
 ```
 スマホ (PWA) ── HTTPS ──▶ tailscale serve ──▶ kelpie (127.0.0.1) ──▶ opencode サービス
 ```
 
-## 動かす
+## インストール（macOS / Apple Silicon）
+
+[GitHub Releases](https://github.com/yumazak/kelpie/releases) にビルド済みバイナリを置いています。mise で入れると更新も追従します。
+
+```bash
+mise use -g github:yumazak/kelpie
+kelpie service install --port 7180
+```
+
+## ソースからビルドして動かす
 
 ```bash
 cargo build --release
-cd web && pnpm install && pnpm build && cd ..
-./target/release/kelpie serve --port 7180 --static-dir "$PWD/web/dist"
+pnpm --dir crates/kelpie/web install
+pnpm --dir crates/kelpie/web build
+./target/release/kelpie serve --port 7180 --static-dir "$PWD/crates/kelpie/web/dist"
 ```
 
 - opencode のサービスが動いていること（`opencode` か `opencode service start`）
@@ -27,8 +37,8 @@ cd web && pnpm install && pnpm build && cd ..
 開発中は web の dev server を使う（`/api` は 7180 にプロキシ）:
 
 ```bash
-cargo run -p kelpie-cli -- serve --port 7180
-cd web && pnpm dev
+cargo run -p kelpie -- serve --port 7180
+pnpm --dir crates/kelpie/web dev
 ```
 
 ## コマンド
@@ -61,8 +71,12 @@ kelpie service status
 - mise で入れた場合は `latest` シンボリックリンクを指すので、`mise upgrade` に追従します
 - 外す: `kelpie service uninstall`
 
+## リリース
+
+`main` に push すると [release-plz](https://release-plz.dev) がリリースPRを作成・更新し、それをマージしたときにタグと GitHub Release が作られます。詳しくは [`RELEASING.md`](https://github.com/yumazak/kelpie/blob/main/RELEASING.md) を参照。
+
 ## 要件
 
 - opencode v2（`opencode service status` が URL を返すこと）
 - Tailscale（`tailscale serve` で公開）
-- ビルド: Rust 1.98+、pnpm 12（web）
+- ビルド: Rust 1.98+、pnpm 12
