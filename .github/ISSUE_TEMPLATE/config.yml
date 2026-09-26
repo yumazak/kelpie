@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://yumazak.github.io/kelpie/
+    about: Setup, usage, and design
+  - name: Report a security vulnerability
+    url: https://github.com/yumazak/kelpie/security/advisories/new
+    about: Please report vulnerabilities privately

@@ -1,4 +1,0 @@
-{
-  "type": "module",
-  "main": "../../dist/standalone-shim/compiler-runtime.js"
-}

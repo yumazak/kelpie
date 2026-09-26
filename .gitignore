@@ -1,6 +1,6 @@
 /target
-/crates/kelpie/web/node_modules
-/crates/kelpie/web/dist
-/crates/kelpie/web/.vite
+node_modules/
+dist/
+.vite/
 *.log
 .DS_Store

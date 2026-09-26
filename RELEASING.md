@@ -36,7 +36,18 @@
 一度だけ必要です。
 
 - **Settings → Actions → General → Workflow permissions** で **"Allow GitHub Actions to create and approve pull requests"** を有効にする。release-plz がリリースPRを作るために必要です。
-- `main` を保護する場合、release-plz のブランチ（`release-plz-*`）からの PR を許可する。CI を必須にするなら、リリースPRを一度 close → reopen すると CI が走ります（下記「注意」参照）。
+- **Settings → General → Pull Requests** で **"Automatically delete head branches"** を有効にする。マージ後に `feature/*` や `release-plz-*` を自動削除します。
+- **Settings → Code security** で **Private vulnerability reporting** を有効にする（`SECURITY.md` の窓口）。
+- `main` の branch protection: **PR 必須** + 必須チェック `rust` / `web` / `docs`。管理者はバイパス可（`enforce_admins = false`）にしておくと安全です。
+
+## release-plz 用トークン（任意だが推奨）
+
+既定では release-plz は `GITHUB_TOKEN` を使います。この場合:
+
+- release-plz が起こしたイベント（PR / タグ / Release）は**他の workflow を起動しません**。
+- そのため**リリースPRには CI が自動で走らず**、`action_required`（承認待ち）になります。毎回、workflow 実行を承認するか PR を close → reopen します。
+
+`RELEASE_PLZ_TOKEN` という secret に **fine-grained PAT**（対象リポジトリ = `kelpie`、権限は **Contents** と **Pull requests** の Read and write）を入れると、`release.yml` がそれを使い、リリースPRにも CI が普通に走ります。`release.yml` は `secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN` でフォールバックするので、設定しなくても動きます。GitHub App のトークンでも同じことができます。
 
 ## バージョンの決まり方
 
@@ -48,13 +59,12 @@
 | `fix:` / `perf:` / `refactor:` / その他 | patch | patch |
 | `feat!:` / `BREAKING CHANGE:` | minor | major |
 
-`web/`（`crates/kelpie/web/`）の変更も同じクレートの変更として数えられます。1バイナリに web が埋め込まれるので、リリース単位はリポジトリ全体です。
+`crates/kelpie/web/` の変更も同じクレートの変更として数えられます。1バイナリに web が埋め込まれるので、リリース単位はリポジトリ全体です。
 
 ## 注意
 
 - リリースは**リリースPRをマージしたときだけ**。`main` へ直接バージョンを上げてもタグは作りません（`release_always = false`）。
-- release-plz は `GITHUB_TOKEN` でタグと Release を作るため、**他の workflow を起動しません**。だから macOS ビルドは同じ `release.yml` 内で実行しています。タグ push を別 workflow のトリガにしたい場合は、release-plz に PAT / GitHub App のトークンを渡してください。
-- 同じ理由で、**リリースPRには CI が自動では走りません**。確認したいときは PR を close → reopen します。
+- release-plz は既定で `GITHUB_TOKEN` を使うため、タグ / Release の作成は**他の workflow を起動しません**。だから macOS ビルドは同じ `release.yml` 内で実行しています。`RELEASE_PLZ_TOKEN`（PAT / GitHub App）を入れると、リリースPRの CI も通常どおり走ります。
 - タグと成果物の名前は mise が依存しています。**変えないでください**:
   - タグ: `vX.Y.Z`
   - 成果物: `kelpie-aarch64-apple-darwin`（+ `.sha256`）
