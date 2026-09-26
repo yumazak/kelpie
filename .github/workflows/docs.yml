@@ -1,0 +1,49 @@
+name: docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/**
+      - .github/workflows/docs.yml
+  workflow_dispatch:
+
+# The pages deployment: read the repo, write the Pages site, mint the OIDC token
+# `actions/deploy-pages` exchanges for the deployment.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Starlight's `lastUpdated` reads each page's git history, which a
+          # shallow clone does not have.
+          fetch-depth: 0
+
+      # `path` points the action at web-dev tooling this repo keeps out of the
+      # root; it finds `docs/pnpm-lock.yaml` on its own. Node and pnpm match
+      # `release.yml` / `mise.toml`.
+      - uses: withastro/action@v6
+        with:
+          path: docs
+          node-version: 26
+          package-manager: pnpm@12
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

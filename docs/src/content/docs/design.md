@@ -1,4 +1,7 @@
-# kelpie 設計
+---
+title: 設計
+description: opencode v2 を一クライアントとして使うときの設計と、その理由。
+---
 
 > opencode v2 のサーバを、Tailscale 越しにスマホのチャットアプリとして操作する。
 > Australian Kelpie（犬）より命名。
