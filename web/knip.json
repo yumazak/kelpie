@@ -1,10 +1,6 @@
 {
   "$schema": "https://knip.dev/schema.json",
-  "entry": [
-    "public/sw.js",
-    "src/components/assistant-ui/**/*.{ts,tsx}",
-    "src/components/ui/**/*.{ts,tsx}"
-  ],
+  "entry": ["public/sw.js"],
   "project": ["src/**/*.{ts,tsx,css}"],
   "ignoreExportsUsedInFile": true
 }

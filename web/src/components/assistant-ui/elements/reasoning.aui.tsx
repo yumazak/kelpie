@@ -15,11 +15,8 @@ import {
   ReasoningContent,
   ReasoningText,
   ReasoningFade,
-  reasoningVariants,
   type ReasoningRootProps,
 } from "./reasoning";
-
-export type { ReasoningRootProps } from "./reasoning";
 
 /** `ReasoningRoot` with the thread viewport scroll locked during disclosure animations. */
 function ReasoningRoot({
@@ -116,5 +113,4 @@ export {
   ReasoningContent,
   ReasoningText,
   ReasoningFade,
-  reasoningVariants,
 };

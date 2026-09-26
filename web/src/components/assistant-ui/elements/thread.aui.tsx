@@ -23,6 +23,7 @@ import {
   ToolGroupTrigger,
 } from "@/components/assistant-ui/elements/tool-group.aui";
 import { TooltipIconButton } from "@/components/assistant-ui/elements/tooltip-icon-button";
+import { BouncingDots } from "@/components/loading-ui/bouncing-dots";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -594,11 +595,7 @@ const AssistantMessage: FC = () => {
                     role="status"
                     className="text-muted-foreground inline-flex items-center gap-2 py-1 text-sm"
                   >
-                    <span className="flex items-center gap-0.5" aria-hidden>
-                      <span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.3s]" />
-                      <span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.15s]" />
-                      <span className="size-1.5 animate-bounce rounded-full bg-current" />
-                    </span>
+                    <BouncingDots className="h-1.5 w-6" aria-hidden />
                     <span className="shimmer motion-reduce:animate-none">
                       考え中…
                     </span>

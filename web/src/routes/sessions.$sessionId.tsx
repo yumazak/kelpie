@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { Chat } from "../components/Chat";
 import { ErrorState } from "../components/ErrorState";
+import { Ring } from "../components/loading-ui/ring";
 import { sessionQuery } from "../lib/queries";
 import { useSessionsContext } from "../lib/sessions-context";
 import type { OcSession } from "../types";
@@ -33,7 +34,11 @@ function SessionScreen() {
     );
   }
   if (!session) {
-    return <div className="h-full animate-pulse bg-background" />;
+    return (
+      <div className="flex h-full items-center justify-center bg-background">
+        <Ring className="size-8 text-muted-foreground" />
+      </div>
+    );
   }
   return (
     <Chat

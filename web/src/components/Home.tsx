@@ -31,6 +31,8 @@ import { deleteSession } from "../api";
 import type { OcSession } from "../types";
 import { ErrorState } from "./ErrorState";
 import { NotifyButton } from "./NotifyButton";
+import { Dots } from "./loading-ui/dots";
+import { Skeleton } from "./ui/skeleton";
 
 /** The display data a row needs, carried on each thread's `custom`. */
 type Row = {
@@ -191,8 +193,9 @@ export function Home({
 
       <div ref={sentinelRef} className="h-8" aria-hidden />
       {hasMore && (
-        <div className="pb-4 text-center text-xs text-muted-foreground">
-          読み込み中…
+        <div className="flex items-center justify-center gap-2 pb-4 text-xs text-muted-foreground">
+          <Dots className="h-1.5 w-5" />
+          読み込み中
         </div>
       )}
 
@@ -328,13 +331,10 @@ function KelpieThreadListItem() {
 function HomeSkeleton() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-5">
-      <div className="mb-4 h-6 w-24 animate-pulse rounded bg-muted" />
-      <div className="mb-5 h-9 w-full animate-pulse rounded-xl bg-muted" />
+      <Skeleton className="mb-4 h-6 w-24" />
+      <Skeleton className="mb-5 h-9 w-full rounded-xl" />
       {[0, 1, 2, 3, 4, 5].map((row) => (
-        <div
-          key={row}
-          className="mb-2 h-12 w-full animate-pulse rounded-xl bg-muted"
-        />
+        <Skeleton key={row} className="mb-2 h-12 w-full rounded-xl" />
       ))}
     </div>
   );
