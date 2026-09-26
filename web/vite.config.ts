@@ -1,8 +1,9 @@
 import { fileURLToPath, URL } from "node:url";
 
-import { defineConfig } from "vite";
+import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { defineConfig } from "vite";
 
 // The dev server proxies the API to a locally running `kelpie serve`, so the
 // browser talks to one origin in development exactly as it does behind the
@@ -11,7 +12,13 @@ import tailwindcss from "@tailwindcss/vite";
 const apiTarget = process.env.KELPIE_API ?? "http://127.0.0.1:7180";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  // `tanstackRouter` generates `src/routeTree.gen.ts` and splits each route's
+  // component into its own chunk. It must run before the React plugin.
+  plugins: [
+    tanstackRouter({ target: "react", autoCodeSplitting: true }),
+    react(),
+    tailwindcss(),
+  ],
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),

@@ -1,14 +1,16 @@
 // The cross-project session list, kept live by the event stream.
 //
-// The service pushes session lifecycle events (`session.created` /
-// `.deleted` / `.execution.*` / `.title`), so the list updates without polling.
-// The first page loads up front; older pages arrive through the cursor as the
-// list is scrolled. The only interval left is a slow watchdog for a stream that
-// reported no error but went quiet.
+// Backed by TanStack Query: the first page loads up front and older pages
+// arrive through the cursor as the list is scrolled. The service pushes session
+// lifecycle events (`session.created` / `.deleted` / `.execution.*`), and each
+// one invalidates the list. The service is local, so re-fetching is cheaper and
+// far more robust than editing the paged cache by hand. The only interval left
+// is a slow watchdog for a stream that went quiet without erroring.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo } from "react";
 
-import { fetchSessions } from "../api";
+import { sessionsKey, sessionsQuery } from "../lib/queries";
 import type { OcSession } from "../types";
 
 /** A last-resort refetch, for a stream that silently stopped delivering. */
@@ -29,177 +31,79 @@ function isListEvent(type: string): boolean {
   );
 }
 
-/** Insert or replace a session by id, keeping a new one at the head. */
-function upsert(list: OcSession[], session: OcSession): OcSession[] {
-  const index = list.findIndex((entry) => entry.id === session.id);
-  if (index === -1) return [session, ...list];
-  const next = list.slice();
-  next[index] = { ...next[index], ...session };
-  return next;
+/** Drop duplicate ids across pages, keeping the newest occurrence. */
+function dedupe(pages: OcSession[][]): OcSession[] {
+  const seen = new Set<string>();
+  const out: OcSession[] = [];
+  for (const page of pages) {
+    for (const session of page) {
+      if (seen.has(session.id)) continue;
+      seen.add(session.id);
+      out.push(session);
+    }
+  }
+  return out;
 }
 
 export function useSessions() {
-  const [sessions, setSessions] = useState<OcSession[]>([]);
-  const [version, setVersion] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [hasMore, setHasMore] = useState(false);
-  // The page token only advances through `loadMore`; a refresh never rewinds it.
-  const cursor = useRef<string | null>(null);
-  const initialized = useRef(false);
-  const loadingMore = useRef(false);
+  const queryClient = useQueryClient();
+  const query = useInfiniteQuery(sessionsQuery);
 
-  /** Fetch page one and fold it over what is loaded, so older pages survive. */
-  const refresh = useCallback(async () => {
-    try {
-      const response = await fetchSessions();
-      setVersion(response.version);
-      if (!initialized.current) {
-        initialized.current = true;
-        cursor.current = response.cursor?.next ?? null;
-      }
-      setHasMore(cursor.current !== null);
-      setSessions((previous) => {
-        const head = response.sessions;
-        const ids = new Set(head.map((session) => session.id));
-        const tail = previous.filter((session) => !ids.has(session.id));
-        return [...head, ...tail];
-      });
-      setError(null);
-    } catch (fetchError: unknown) {
-      setError(String(fetchError));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const sessions = useMemo(
+    () => dedupe(query.data?.pages.map((page) => page.sessions) ?? []),
+    [query.data],
+  );
+  const version = query.data?.pages[0]?.version ?? "";
 
-  /** Fetch the next older page and append the sessions not already shown. */
-  const loadMore = useCallback(async () => {
-    if (loadingMore.current || cursor.current === null) return;
-    loadingMore.current = true;
-    try {
-      const response = await fetchSessions(cursor.current);
-      cursor.current = response.cursor?.next ?? null;
-      setHasMore(cursor.current !== null);
-      setSessions((previous) => {
-        const seen = new Set(previous.map((session) => session.id));
-        return [
-          ...previous,
-          ...response.sessions.filter((session) => !seen.has(session.id)),
-        ];
-      });
-    } catch (fetchError: unknown) {
-      setError(String(fetchError));
-    } finally {
-      loadingMore.current = false;
-    }
-  }, []);
-
-  // Live updates from the event stream, plus a resync on (re)connect.
+  // Live updates from the event stream, plus a resync on (re)connect and while
+  // the tab regains visibility. Events are debounced, so a turn's start and
+  // finish collapse into one refetch.
   useEffect(() => {
-    let refreshTimer: number | undefined;
-    const scheduleRefresh = () => {
-      window.clearTimeout(refreshTimer);
-      refreshTimer = window.setTimeout(() => void refresh(), 500);
+    let timer: number | undefined;
+    const invalidate = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: sessionsKey });
+      }, 400);
     };
 
     const source = new EventSource("/api/events");
-    source.addEventListener("open", () => void refresh());
+    source.addEventListener("open", invalidate);
     source.addEventListener("oc", (message) => {
-      let event: { type?: string; data?: Record<string, unknown> };
+      let event: { type?: string };
       try {
         event = JSON.parse((message as MessageEvent<string>).data);
       } catch {
         return;
       }
-      const type = event.type ?? "";
-      if (!isListEvent(type)) return;
-      const data = event.data ?? {};
-      const id = (data.sessionID as string) ?? (data.id as string);
-      if (!id) return;
-
-      if (type === "session.deleted") {
-        setSessions((previous) =>
-          previous.filter((session) => session.id !== id),
-        );
-        return;
-      }
-      if (type === "session.created") {
-        const session = { ...(data as unknown as OcSession), id };
-        setSessions((previous) => upsert(previous, session));
-        return;
-      }
-      if (type === "session.execution.started") {
-        setSessions((previous) =>
-          previous.map((session) =>
-            session.id === id ? { ...session, active: true } : session,
-          ),
-        );
-        return;
-      }
-      if (type.startsWith("session.execution.")) {
-        setSessions((previous) =>
-          previous.map((session) =>
-            session.id === id
-              ? {
-                  ...session,
-                  active: false,
-                  time: { ...session.time, updated: Date.now() },
-                }
-              : session,
-          ),
-        );
-        return;
-      }
-      if (type === "session.renamed") {
-        const title = data.title;
-        if (typeof title === "string") {
-          setSessions((previous) =>
-            previous.map((session) =>
-              session.id === id ? { ...session, title } : session,
-            ),
-          );
-        }
-        return;
-      }
-      if (type === "session.agent.selected") {
-        const agent = data.agent;
-        if (typeof agent === "string") {
-          setSessions((previous) =>
-            previous.map((session) =>
-              session.id === id ? { ...session, agent } : session,
-            ),
-          );
-        }
-        return;
-      }
-      if (type === "session.metadata.updated") {
-        const metadata = data.metadata as Record<string, unknown> | undefined;
-        setSessions((previous) =>
-          previous.map((session) =>
-            session.id === id ? { ...session, metadata } : session,
-          ),
-        );
-        return;
-      }
-      // `session.moved` / `session.model.selected`: the projection changed in a
-      // way that a full refetch settles (debounced).
-      scheduleRefresh();
+      if (isListEvent(event.type ?? "")) invalidate();
     });
 
-    const watchdog = window.setInterval(() => void refresh(), WATCHDOG_MS);
+    const watchdog = window.setInterval(invalidate, WATCHDOG_MS);
     const onVisible = () => {
-      if (document.visibilityState === "visible") void refresh();
+      if (document.visibilityState === "visible") invalidate();
     };
     document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       source.close();
       window.clearInterval(watchdog);
-      window.clearTimeout(refreshTimer);
+      window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [refresh]);
+  }, [queryClient]);
 
-  return { sessions, version, error, loading, hasMore, loadMore, refresh };
+  return {
+    sessions,
+    version,
+    error: query.error ? String(query.error) : null,
+    loading: query.isLoading,
+    hasMore: query.hasNextPage,
+    loadMore: async () => {
+      await query.fetchNextPage();
+    },
+    refresh: async () => {
+      await query.refetch();
+    },
+  };
 }

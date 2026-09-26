@@ -27,27 +27,6 @@ function toolResult(content: unknown): string | undefined {
   return JSON.stringify(content);
 }
 
-/** A one-line gist of a tool call. */
-function toolSummary(input: unknown): string {
-  if (!input || typeof input !== "object") return "";
-  const object = input as Record<string, unknown>;
-  for (const key of [
-    "command",
-    "filePath",
-    "file_path",
-    "path",
-    "pattern",
-    "query",
-    "url",
-    "description",
-  ]) {
-    if (typeof object[key] === "string") return object[key] as string;
-  }
-  return "";
-}
-
-export { toolSummary };
-
 /** A pending permission, as assistant-ui's tool-approval request. */
 function approvalOf(
   permission: OcPermission,

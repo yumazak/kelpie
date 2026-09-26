@@ -1,0 +1,10 @@
+{
+  "$schema": "https://knip.dev/schema.json",
+  "entry": [
+    "public/sw.js",
+    "src/components/assistant-ui/**/*.{ts,tsx}",
+    "src/components/ui/**/*.{ts,tsx}"
+  ],
+  "project": ["src/**/*.{ts,tsx,css}"],
+  "ignoreExportsUsedInFile": true
+}

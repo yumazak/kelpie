@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { deleteSession } from "../api";
 import type { OcSession } from "../types";
 import { ErrorState } from "./ErrorState";
+import { NotifyButton } from "./NotifyButton";
 
 /** The display data a row needs, carried on each thread's `custom`. */
 type Row = {
@@ -172,7 +173,10 @@ export function Home({
     <div className="mx-auto h-full max-w-2xl overflow-y-auto px-4 py-5">
       <header className="mb-4 flex items-center justify-between">
         <div className="text-lg font-semibold">kelpie</div>
-        <div className="text-xs text-muted-foreground">opencode</div>
+        <div className="flex items-center gap-3">
+          <div className="text-xs text-muted-foreground">opencode</div>
+          <NotifyButton />
+        </div>
       </header>
 
       {sessions.length === 0 ? (

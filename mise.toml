@@ -1,0 +1,15 @@
+# The toolchain mise provides for this repo. Node is pinned to the version the
+# release workflow uses (22); pnpm to the version CI installs (10).
+#
+# `knip` is deliberately absent: it is a devDependency of web/, so its version
+# is locked in pnpm-lock.yaml and CI can run it without mise.
+
+[tools]
+rust = "1.96"
+node = "22"
+pnpm = "10"
+prek = "latest"
+
+[tasks.check]
+description = "Run every pre-commit hook against the whole tree"
+run = "prek run --all-files"

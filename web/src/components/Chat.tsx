@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { ThreadMessageLike } from "@assistant-ui/react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   ToolGroupContent,
@@ -17,9 +18,6 @@ import {
   type ThreadGroupPart,
 } from "@/components/assistant-ui/elements/thread.aui";
 import {
-  fetchForms,
-  fetchMessages,
-  fetchPermissions,
   interruptSession,
   replyForm,
   replyPermission,
@@ -28,7 +26,15 @@ import {
 } from "../api";
 import { useLiveMessage } from "../hooks/useLiveMessage";
 import { attachApprovals, toThreadMessages } from "../lib/convert";
-import type { OcForm, OcPermission, OcSession } from "../types";
+import {
+  formsKey,
+  formsQuery,
+  messagesKey,
+  messagesQuery,
+  permissionsKey,
+  permissionsQuery,
+} from "../lib/queries";
+import type { OcSession } from "../types";
 import { ErrorState } from "./ErrorState";
 import { HarnessDock } from "./HarnessDock";
 import { RuntimeProvider } from "./RuntimeProvider";
@@ -74,75 +80,68 @@ export function Chat({
   session: OcSession;
   onBack: () => void;
 }) {
+  const queryClient = useQueryClient();
   const [messages, setMessages] = useState<ThreadMessageLike[]>([]);
   const [optimistic, setOptimistic] = useState<ThreadMessageLike | null>(null);
-  const [permissions, setPermissions] = useState<OcPermission[]>([]);
-  const [forms, setForms] = useState<OcForm[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const stale = useRef(false);
 
-  const reload = useCallback(async () => {
-    try {
-      const response = await fetchMessages(session.id);
-      if (stale.current) return;
-      const next = toThreadMessages(response.data);
-      setMessages((previous) =>
-        signature(previous) === signature(next) ? previous : next,
-      );
-      // The sent message is the server's now; drop the local stand-in.
-      setOptimistic((current) =>
-        current && next.some((m) => m.role === "user" && textOf(m) === textOf(current))
-          ? null
-          : current,
-      );
-      setError(null);
-    } catch (fetchError: unknown) {
-      if (!stale.current) setError(String(fetchError));
-    } finally {
-      if (!stale.current) setLoading(false);
-    }
-  }, [session.id]);
+  // The poll is only a fallback: the event stream is primary, and a landed
+  // step invalidates these immediately. This catches a stream that went quiet
+  // without erroring.
+  const messagesResult = useQuery({
+    ...messagesQuery(session.id),
+    refetchInterval: POLL_MS,
+  });
+  const permissionsResult = useQuery({
+    ...permissionsQuery(session.id),
+    refetchInterval: POLL_MS,
+  });
+  const formsResult = useQuery({
+    ...formsQuery(session.id),
+    refetchInterval: POLL_MS,
+  });
 
+  const permissions = permissionsResult.data ?? [];
+  const forms = formsResult.data ?? [];
+  const error = messagesResult.error ? String(messagesResult.error) : null;
+  const loading = messagesResult.isLoading;
+
+  // Keep the rendered list stable when the server's copy is unchanged, so a
+  // poll that returns the same turns does not re-render the whole thread.
   useEffect(() => {
-    stale.current = false;
-    // `reload` only touches state after its awaits; the linter cannot see that.
-    // eslint-disable-next-line react/set-state-in-effect
-    void reload();
-    const id = window.setInterval(() => {
-      void reload();
-    }, POLL_MS);
-    return () => {
-      stale.current = true;
-      window.clearInterval(id);
-    };
-  }, [reload]);
+    const next = toThreadMessages(messagesResult.data?.data ?? []);
+    setMessages((previous) =>
+      signature(previous) === signature(next) ? previous : next,
+    );
+  }, [messagesResult.data]);
 
-  // The pending permission / form lists. Best-effort.
-  const refreshDock = useCallback(async () => {
-    try {
-      const [nextPermissions, nextForms] = await Promise.all([
-        fetchPermissions(session.id),
-        fetchForms(session.id),
-      ]);
-      if (stale.current) return;
-      setPermissions(nextPermissions);
-      setForms(nextForms);
-    } catch {
-      /* the dock is best-effort */
-    }
-  }, [session.id]);
-
+  // The sent message is the server's now; drop the local stand-in.
   useEffect(() => {
-    // eslint-disable-next-line react/set-state-in-effect
-    void refreshDock();
-    const id = window.setInterval(() => {
-      void refreshDock();
-    }, 10000);
-    return () => window.clearInterval(id);
-  }, [refreshDock]);
+    setOptimistic((current) =>
+      current &&
+      messages.some((m) => m.role === "user" && textOf(m) === textOf(current))
+        ? null
+        : current,
+    );
+  }, [messages]);
 
-  const { live, running } = useLiveMessage(session.id, reload, refreshDock);
+  const invalidateMessages = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: messagesKey(session.id) }),
+    [queryClient, session.id],
+  );
+  const invalidateDock = useCallback(
+    () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: permissionsKey(session.id) }),
+        queryClient.invalidateQueries({ queryKey: formsKey(session.id) }),
+      ]).then(() => undefined),
+    [queryClient, session.id],
+  );
+
+  const { live, running } = useLiveMessage(
+    session.id,
+    invalidateMessages,
+    invalidateDock,
+  );
 
   const handleNew = useCallback(
     async (text: string, files: PromptFile[]) => {
@@ -165,9 +164,9 @@ export function Chat({
         setOptimistic(null);
         throw sendError;
       }
-      void reload();
+      void invalidateMessages();
     },
-    [session.id, reload],
+    [session.id, invalidateMessages],
   );
 
   const handleStop = useCallback(async () => {
@@ -176,25 +175,25 @@ export function Chat({
     } catch {
       /* the turn may already be over */
     }
-    void reload();
-  }, [session.id, reload]);
+    void invalidateMessages();
+  }, [session.id, invalidateMessages]);
 
   const handlePermissionReply = useCallback(
     async (id: string, decision: "once" | "always" | "reject") => {
       await replyPermission(session.id, id, decision);
-      await refreshDock();
-      void reload();
+      await invalidateDock();
+      void invalidateMessages();
     },
-    [session.id, refreshDock, reload],
+    [session.id, invalidateDock, invalidateMessages],
   );
 
   const handleFormReply = useCallback(
     async (formId: string, answer: Record<string, unknown>) => {
       await replyForm(session.id, formId, answer);
-      await refreshDock();
-      void reload();
+      await invalidateDock();
+      void invalidateMessages();
     },
-    [session.id, refreshDock, reload],
+    [session.id, invalidateDock, invalidateMessages],
   );
 
   // The pending permissions ride along on the tool calls they gate.
@@ -227,7 +226,7 @@ export function Chat({
       <HarnessDock
         sessionId={session.id}
         forms={dockForms}
-        onReplied={refreshDock}
+        onReplied={invalidateDock}
       />
     ) : undefined;
 
@@ -256,7 +255,7 @@ export function Chat({
 
       <div className="min-h-0 flex-1">
         {error ? (
-          <ErrorState detail={error} onRetry={() => void reload()} />
+          <ErrorState detail={error} onRetry={() => void invalidateMessages()} />
         ) : (
           <RuntimeProvider
             messages={rendered}

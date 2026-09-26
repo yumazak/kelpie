@@ -122,11 +122,7 @@ impl OpencodeClient {
 
     /// Every session, across every project, newest first. `cursor` is the
     /// opaque page token the service returns as `cursor.next`.
-    pub async fn sessions(
-        &self,
-        limit: u32,
-        cursor: Option<&str>,
-    ) -> Result<Value, OpencodeError> {
+    pub async fn sessions(&self, limit: u32, cursor: Option<&str>) -> Result<Value, OpencodeError> {
         let mut path = format!("/api/session?limit={limit}&order=desc");
         if let Some(cursor) = cursor {
             // The token is base64url (URL-safe), so it needs no escaping.

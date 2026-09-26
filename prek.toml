@@ -1,0 +1,59 @@
+# Checks that run before each commit, via `prek` (installed by mise).
+#
+# The toolchain is pinned in mise.toml; `knip` is a devDependency of web/, so
+# `pnpm --dir web` resolves it from the lockfile.
+#
+# Whole-project checks set `pass_filenames = false` and are scoped with
+# `files`, so a Rust-only commit does not pay for the web checks and a web-only
+# commit does not pay for cargo.
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "knip"
+name = "knip (unused files, exports, deps)"
+entry = "pnpm --dir web run knip"
+language = "system"
+files = "^web/"
+pass_filenames = false
+
+[[repos.hooks]]
+id = "oxlint"
+name = "oxlint"
+entry = "pnpm --dir web run lint"
+language = "system"
+files = "^web/"
+pass_filenames = false
+
+[[repos.hooks]]
+id = "typecheck"
+name = "tsc --build"
+entry = "pnpm --dir web run typecheck"
+language = "system"
+files = "^web/"
+pass_filenames = false
+
+[[repos.hooks]]
+id = "routes"
+name = "routeTree.gen.ts is current"
+entry = "bash web/scripts/check-routes.sh"
+language = "system"
+files = "^web/src/routes/|^web/src/routeTree\\.gen\\.ts$"
+pass_filenames = false
+
+[[repos.hooks]]
+id = "cargo-fmt"
+name = "cargo fmt"
+entry = "cargo fmt --all -- --check"
+language = "system"
+types = ["rust"]
+pass_filenames = false
+
+[[repos.hooks]]
+id = "cargo-clippy"
+name = "cargo clippy"
+entry = "cargo clippy --workspace --all-targets -- -D warnings"
+language = "system"
+types = ["rust"]
+pass_filenames = false
