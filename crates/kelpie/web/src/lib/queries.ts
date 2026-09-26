@@ -10,12 +10,14 @@ import {
   fetchForms,
   fetchMessages,
   fetchPermissions,
+  fetchProjects,
   fetchSession,
   fetchSessions,
   fetchSkills,
 } from "../api";
 
 export const sessionsKey = ["sessions"] as const;
+export const projectsKey = ["projects"] as const;
 export const sessionKey = (id: string) => ["session", id] as const;
 export const messagesKey = (id: string) => ["messages", id] as const;
 export const permissionsKey = (id: string) => ["permissions", id] as const;
@@ -28,6 +30,14 @@ export const sessionsQuery = infiniteQueryOptions({
   queryFn: ({ pageParam }) => fetchSessions(pageParam),
   initialPageParam: undefined as string | undefined,
   getNextPageParam: (last) => last.cursor?.next ?? undefined,
+});
+
+/** The repository names the list groups by. Worktrees change from outside the
+ *  app and rarely, so this is cached rather than refetched with each event. */
+export const projectsQuery = queryOptions({
+  queryKey: projectsKey,
+  queryFn: fetchProjects,
+  staleTime: 5 * 60 * 1000,
 });
 
 export const sessionQuery = (id: string) =>

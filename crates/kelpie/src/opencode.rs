@@ -169,6 +169,21 @@ impl OpencodeClient {
         Ok(value)
     }
 
+    /// Every project opencode knows, across every repository.
+    pub async fn projects(&self) -> Result<Value, OpencodeError> {
+        self.json(reqwest::Method::GET, "/api/project", None).await
+    }
+
+    /// One project's worktree inventory. The entry with no `strategy` is the
+    /// main checkout; the rest are worktrees (`strategy: "git"`). Its basename
+    /// is the repository name.
+    pub async fn worktrees(&self, project_id: &str) -> Result<Value, OpencodeError> {
+        let request = self
+            .request(reqwest::Method::GET, "/api/worktree")
+            .query(&[("projectID", project_id)]);
+        self.send_json(request).await
+    }
+
     /// Sessions with a turn in flight. `{ ses_id: { type: "running" } }`.
     pub async fn active_sessions(&self) -> Result<Value, OpencodeError> {
         self.json(reqwest::Method::GET, "/api/session/active", None)
@@ -193,26 +208,6 @@ impl OpencodeClient {
             None,
         )
         .await
-    }
-
-    /// The directory a session ran in, when the service reports one. Used to
-    /// name the project on a notification for an event that carries no
-    /// `location` (the execution events do not).
-    pub async fn session_directory(&self, session_id: &str) -> Option<String> {
-        let value = self
-            .json(
-                reqwest::Method::GET,
-                &format!("/api/session/{session_id}"),
-                None,
-            )
-            .await
-            .ok()?;
-        value
-            .get("data")
-            .and_then(|data| data.get("location"))
-            .and_then(|location| location.get("directory"))
-            .and_then(|value| value.as_str())
-            .map(str::to_string)
     }
 
     /// Every skill registered for `directory` (a project). The service searches

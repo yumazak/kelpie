@@ -7,10 +7,10 @@
 // far more robust than editing the paged cache by hand. The only interval left
 // is a slow watchdog for a stream that went quiet without erroring.
 
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 
-import { sessionsKey, sessionsQuery } from "../lib/queries";
+import { projectsQuery, sessionsKey, sessionsQuery } from "../lib/queries";
 import type { OcSession } from "../types";
 
 /** A last-resort refetch, for a stream that silently stopped delivering. */
@@ -48,6 +48,9 @@ function dedupe(pages: OcSession[][]): OcSession[] {
 export function useSessions() {
   const queryClient = useQueryClient();
   const query = useInfiniteQuery(sessionsQuery);
+  // Repository names, so the list can group worktrees together. A failure only
+  // costs the tidier grouping; the list still renders by directory.
+  const projects = useQuery(projectsQuery);
 
   const sessions = useMemo(
     () => dedupe(query.data?.pages.map((page) => page.sessions) ?? []),
@@ -95,6 +98,7 @@ export function useSessions() {
 
   return {
     sessions,
+    projects: projects.data ?? [],
     version,
     error: query.error ? String(query.error) : null,
     loading: query.isLoading,

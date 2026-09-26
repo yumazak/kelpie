@@ -30,6 +30,7 @@ opencode v2 は **サーバ + クライアント**の構造で、TUI も web も
 | 会話（構造化） | `GET /api/session/{id}/message` |
 | ストリーミング | `GET /api/event`（`session.text.delta` 等） |
 | 送信 | `POST /api/session/{id}/prompt` |
+| リポジトリ（worktree 統合）/ 本体チェックアウト | `GET /api/project` / `GET /api/worktree` |
 | 権限 | `GET /api/session/{id}/permission` / `POST .../reply` |
 | 質問（form） | `GET /api/session/{id}/form` / `POST .../reply` |
 
@@ -82,7 +83,10 @@ TUI 専用のハーネス（claude / codex / pi）は、画面を読んでキー
 
 ## 4. UI
 
-- **Home**: 全セッションを**ディレクトリ（プロジェクト）別**に一覧。状態ドット、相対時刻。
+- **Home**: 全セッションを**リポジトリ別**、その下に**ディレクトリ（worktree）別**に一覧。
+  同じリポジトリの worktree は opencode の `projectID` でひとつにまとまり、
+  本体チェックアウト（`GET /api/worktree` で `strategy` が付かないディレクトリ）の
+  basename をリポジトリ名にする。状態ドット、相対時刻。
 - **Chat**: assistant-ui の styled `Thread`。会話は opencode のメッセージをそのまま描画
   （`user` → バブル、`assistant` の `text` → markdown、`reasoning` → 折りたたみ、`tool` → カード）。
 - **ストリーミング**: `session.text.delta` を積んで進行中の発言を描画。`step.ended` で
@@ -100,6 +104,9 @@ TUI 専用のハーネス（claude / codex / pi）は、画面を読んでキー
 - **VAPID** 鍵は初回起動時に生成（`p256`、`~/.local/state/kelpie/push.json`）
 - 端末の購読を保存し、`web-push` で送信（`urgency: high`、TTL 6h、404/410 は破棄）
 - トリガ: `permission.asked` / `form.created` / `session.execution.succeeded` / `.failed`
+- タイトルは**リポジトリ名**で始める（worktree のブランチではなく本体チェックアウトの
+  basename。セッションの `projectID` から `GET /api/worktree` で解決し、セッション単位・
+  プロジェクト単位でキャッシュ）
 - 本文に**何を聞かれているか**を載せる（権限は action + resources、form は質問）
 - タップで対象セッションを開く。iOS は URL クエリを落とすことがあるので、
   SW が Cache Storage にセッションIDを置き、起動時にアプリが読む

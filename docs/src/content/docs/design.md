@@ -31,6 +31,7 @@ already there:
 | Conversation (structured) | `GET /api/session/{id}/message` |
 | Streaming | `GET /api/event` (`session.text.delta` and friends) |
 | Sending | `POST /api/session/{id}/prompt` |
+| Repository (worktrees) / main checkout | `GET /api/project` / `GET /api/worktree` |
 | Permissions | `GET /api/session/{id}/permission` / `POST .../reply` |
 | Questions (forms) | `GET /api/session/{id}/form` / `POST .../reply` |
 
@@ -86,7 +87,10 @@ The events that matter:
 
 ## 4. UI
 
-- **Home**: every session, grouped by **directory (project)**. Status dot, relative time.
+- **Home**: every session, grouped by **repository** and then by the **directory
+  (worktree)** it ran in. The worktrees of one repository share an opencode
+  `projectID`, and the repository is named by the basename of its main checkout (the
+  directory `GET /api/worktree` lists without a `strategy`). Status dot, relative time.
 - **Chat**: assistant-ui's styled `Thread`. Conversations render opencode's messages as
   they are (`user` → bubble, assistant `text` → markdown, `reasoning` → collapsible,
   `tool` → card).
@@ -108,6 +112,9 @@ The events that matter:
   404/410 responses drop the subscription)
 - Triggers: `permission.asked` / `form.created` / `session.execution.succeeded` /
   `.failed`
+- The title starts with the **repository name** — the main checkout's basename, not a
+  worktree's branch, resolved from the session's `projectID` through
+  `GET /api/worktree` and cached per session and per project
 - The body says **what is being asked** (for permissions: action + resources; for
   forms: the question)
 - Tapping a notification opens that session. iOS sometimes drops URL query strings, so

@@ -2,6 +2,7 @@ import type {
   OcForm,
   OcMessagesResponse,
   OcPermission,
+  OcProject,
   OcSession,
   OcSessionsResponse,
   OcSkill,
@@ -27,6 +28,13 @@ async function getJson<T>(path: string): Promise<T> {
 export function fetchSessions(cursor?: string): Promise<OcSessionsResponse> {
   const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
   return getJson<OcSessionsResponse>(`/api/sessions${query}`);
+}
+
+/** Every project, named by its repository. Powers repository grouping; worktree
+ *  directories within a project come from the sessions themselves. */
+export async function fetchProjects(): Promise<OcProject[]> {
+  const body = await getJson<{ projects: OcProject[] }>("/api/projects");
+  return body.projects ?? [];
 }
 
 /** One session, by id. */

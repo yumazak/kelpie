@@ -7,12 +7,13 @@ import { useSessionsContext } from "../lib/sessions-context";
 export const Route = createFileRoute("/")({ component: ListScreen });
 
 function ListScreen() {
-  const { sessions, error, loading, hasMore, loadMore, refresh } =
+  const { sessions, projects, error, loading, hasMore, loadMore, refresh } =
     useSessionsContext();
   const navigate = useNavigate();
   return (
     <Home
       sessions={sessions}
+      projects={projects}
       error={error}
       loading={loading}
       hasMore={hasMore}
