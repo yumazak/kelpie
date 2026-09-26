@@ -582,7 +582,9 @@ const AssistantMessage: FC = () => {
                       <span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.15s]" />
                       <span className="size-1.5 animate-bounce rounded-full bg-current" />
                     </span>
-                    考え中…
+                    <span className="shimmer motion-reduce:animate-none">
+                      考え中…
+                    </span>
                   </span>
                 );
               default:
