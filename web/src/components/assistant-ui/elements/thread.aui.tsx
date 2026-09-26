@@ -576,10 +576,15 @@ const AssistantMessage: FC = () => {
                 return (
                   <span
                     data-slot="aui_assistant-message-indicator"
-                    className="animate-pulse font-sans"
-                    aria-label="Assistant is working"
+                    role="status"
+                    className="text-muted-foreground inline-flex items-center gap-2 py-1 text-sm"
                   >
-                    {"●"}
+                    <span className="flex items-center gap-0.5" aria-hidden>
+                      <span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.3s]" />
+                      <span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.15s]" />
+                      <span className="size-1.5 animate-bounce rounded-full bg-current" />
+                    </span>
+                    考え中…
                   </span>
                 );
               default:
