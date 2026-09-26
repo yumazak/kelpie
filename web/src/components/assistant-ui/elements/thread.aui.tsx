@@ -55,7 +55,6 @@ import {
   DownloadIcon,
   MicIcon,
   MoreHorizontalIcon,
-  PencilIcon,
   PhoneIcon,
   RefreshCwIcon,
   SquareIcon,
@@ -666,9 +665,6 @@ const UserMessage: FC = () => {
             components={{ File: UserFilePart, Image: UserImagePart }}
           />
         </div>
-        <div className="aui-user-action-bar-wrapper absolute start-0 top-1/2 -translate-x-full -translate-y-1/2 pe-2 peer-empty:hidden rtl:translate-x-full">
-          <UserActionBar />
-        </div>
       </div>
 
       <BranchPicker
@@ -676,18 +672,6 @@ const UserMessage: FC = () => {
         className="col-span-full col-start-1 -me-1 justify-end"
       />
     </MessagePrimitive.Root>
-  );
-};
-
-const UserActionBar: FC = () => {
-  return (
-    <ActionBarPrimitive.Root
-      hideWhenRunning
-      autohide="not-last"
-      className="aui-user-action-bar-root flex flex-col items-end"
-    >
-      <ActionBarPrimitive.Edit render={<TooltipIconButton tooltip="Edit" className="aui-user-action-edit" />}><PencilIcon /></ActionBarPrimitive.Edit>
-    </ActionBarPrimitive.Root>
   );
 };
 
