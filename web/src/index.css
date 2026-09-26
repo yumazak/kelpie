@@ -48,12 +48,17 @@ body,
   height: 100%;
 }
 
+/* iOS honours `overflow: hidden` on <html>, not only on <body>, so lock both:
+   the app shell is fixed and only each screen's own container scrolls. */
+html {
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   /* Match the visible viewport on mobile (100dvh, with the 100% above as a
-     fallback) and never let the page itself scroll: the app shell is fixed and
-     each screen owns its scrolling. That keeps the chat header and composer
-     still while only the conversation moves. */
+     fallback) and never let the page itself scroll. That keeps the chat header
+     and composer still while only the conversation moves. */
   height: 100dvh;
   overflow: hidden;
   overscroll-behavior-y: none;
