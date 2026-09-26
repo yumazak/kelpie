@@ -30,9 +30,16 @@ export interface OcSession {
   active?: boolean;
 }
 
+/** The service's opaque page token; `next` fetches older sessions. */
+export interface OcCursor {
+  previous?: string | null;
+  next?: string | null;
+}
+
 export interface OcSessionsResponse {
   version: string;
   sessions: OcSession[];
+  cursor?: OcCursor | null;
 }
 
 export type OcContentPart =

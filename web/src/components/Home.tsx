@@ -1,4 +1,11 @@
-import { createContext, useContext, useMemo, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { EllipsisVertical } from "lucide-react";
 import {
   AssistantRuntimeProvider,
@@ -21,13 +28,8 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { deleteSession } from "../api";
-import type { OcSession, OcSessionsResponse } from "../types";
+import type { OcSession } from "../types";
 import { ErrorState } from "./ErrorState";
-
-type Tab = "recent" | "all";
-
-/** "Recently worked on": updated within the last day. */
-const RECENT_MS = 24 * 60 * 60 * 1000;
 
 /** The display data a row needs, carried on each thread's `custom`. */
 type Row = {
@@ -83,48 +85,62 @@ function toThread(session: OcSession): ExternalStoreThreadData<"regular"> {
   };
 }
 
-/** Every session, grouped by the directory it ran in, behind two tabs. */
+/** Every session, grouped by the directory it ran in. Older pages stream in as
+ *  the list is scrolled. */
 export function Home({
-  state,
+  sessions,
   error,
+  loading,
+  hasMore,
+  onLoadMore,
   onSelect,
   onRefresh,
 }: {
-  state: OcSessionsResponse | null;
+  sessions: OcSession[];
   error: string | null;
+  loading: boolean;
+  hasMore: boolean;
+  onLoadMore: () => Promise<void>;
   onSelect: (session: OcSession) => void;
   onRefresh: () => Promise<void>;
 }) {
-  const [tab, setTab] = useState<Tab>("recent");
   const [pendingDelete, setPendingDelete] = useState<OcSession | null>(null);
   const [busy, setBusy] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Infinite scroll: pull the next page as the sentinel nears the viewport.
+  // `sessions.length` in the deps re-arms the observer after each append, so a
+  // list still shorter than the screen keeps loading.
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) void onLoadMore();
+      },
+      { rootMargin: "300px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, onLoadMore, sessions.length]);
 
   if (error) {
     return <ErrorState detail={error} onRetry={() => void onRefresh()} />;
   }
-  if (!state) {
+  if (loading && sessions.length === 0) {
     return <HomeSkeleton />;
   }
 
-  // The list re-renders on every poll, so reading the clock here is what keeps
-  // "recent" current.
-  // eslint-disable-next-line react/purity
-  const cutoff = Date.now() - RECENT_MS;
-  const recent = state.sessions.filter(
-    (session) => (session.time?.updated ?? 0) > cutoff,
-  );
-  const shown = tab === "recent" ? recent : state.sessions;
-
   const groups = new Map<string, OcSession[]>();
-  for (const session of shown) {
+  for (const session of sessions) {
     const key = session.location?.directory ?? "(unknown)";
     const list = groups.get(key) ?? [];
     list.push(session);
     groups.set(key, list);
   }
   const ordered = [...groups.entries()].sort((a, b) => {
-    const latest = (sessions: OcSession[]) =>
-      Math.max(...sessions.map((session) => session.time?.updated ?? 0));
+    const latest = (items: OcSession[]) =>
+      Math.max(...items.map((session) => session.time?.updated ?? 0));
     return latest(b[1]) - latest(a[1]);
   });
 
@@ -134,7 +150,7 @@ export function Home({
   // throw. Remount whenever the displayed set changes, so the runtime always
   // matches what is on screen.
   const listKey = ordered
-    .flatMap(([, sessions]) => sessions.map((session) => session.id))
+    .flatMap(([, items]) => items.map((session) => session.id))
     .join("|");
 
   const confirmDelete = async () => {
@@ -150,7 +166,7 @@ export function Home({
   };
 
   const openMenu = (id: string) =>
-    setPendingDelete(state.sessions.find((session) => session.id === id) ?? null);
+    setPendingDelete(sessions.find((session) => session.id === id) ?? null);
 
   return (
     <div className="mx-auto h-full max-w-2xl overflow-y-auto px-4 py-5">
@@ -159,31 +175,21 @@ export function Home({
         <div className="text-xs text-muted-foreground">opencode</div>
       </header>
 
-      <div className="mb-4 flex gap-1 rounded-xl bg-muted/50 p-1 text-sm">
-        <TabButton
-          active={tab === "recent"}
-          onClick={() => setTab("recent")}
-          label="最近"
-          count={recent.length}
-        />
-        <TabButton
-          active={tab === "all"}
-          onClick={() => setTab("all")}
-          label="すべて"
-          count={state.sessions.length}
-        />
-      </div>
-
-      {ordered.length === 0 ? (
+      {sessions.length === 0 ? (
         <div className="py-16 text-center text-sm text-muted-foreground">
-          {tab === "recent"
-            ? "24時間以内のセッションはありません"
-            : "セッションがありません"}
+          セッションがありません
         </div>
       ) : (
         <MoreContext.Provider value={openMenu}>
           <HomeThreadList key={listKey} groups={ordered} onSelect={onSelect} />
         </MoreContext.Provider>
+      )}
+
+      <div ref={sentinelRef} className="h-8" aria-hidden />
+      {hasMore && (
+        <div className="pb-4 text-center text-xs text-muted-foreground">
+          読み込み中…
+        </div>
       )}
 
       <Dialog
@@ -311,33 +317,6 @@ function KelpieThreadListItem() {
         <EllipsisVertical className="size-4" />
       </button>
     </ThreadListItemPrimitive.Root>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  label,
-  count,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  count: number;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex-1 rounded-lg px-3 py-1.5 transition-colors",
-        active
-          ? "bg-background text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground",
-      )}
-    >
-      {label} <span className="text-xs opacity-70">{count}</span>
-    </button>
   );
 }
 

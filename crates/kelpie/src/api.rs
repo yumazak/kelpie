@@ -13,7 +13,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get, post};
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::json;
@@ -26,6 +26,10 @@ use crate::push::{self, Notification, PushStore, Subscription};
 /// How long a discovered opencode client is trusted before re-discovering. The
 /// service picks a fresh port when it restarts.
 const DISCOVERY_TTL: Duration = Duration::from_secs(30);
+
+/// Session page size for the cross-project list. Older sessions arrive through
+/// the `cursor` page token as the client scrolls. The service caps a page at 20.
+const SESSIONS_PAGE: u32 = 20;
 
 struct Inner {
     opencode: Mutex<Option<(Instant, OpencodeClient)>>,
@@ -92,7 +96,10 @@ pub fn router(state: AppState, static_dir: Option<PathBuf>) -> Router {
         .route("/api/sessions", get(oc_sessions))
         .route("/api/events", get(oc_events))
         .route("/api/sessions/{id}/messages", get(oc_messages))
-        .route("/api/sessions/{id}", delete(oc_delete_session))
+        .route(
+            "/api/sessions/{id}",
+            get(oc_session).delete(oc_delete_session),
+        )
         .route("/api/sessions/{id}/prompt", post(oc_prompt))
         .route("/api/sessions/{id}/interrupt", post(oc_interrupt))
         .route("/api/sessions/{id}/permissions", get(oc_permissions))
@@ -222,13 +229,24 @@ fn oc_error(error: crate::opencode::OpencodeError) -> ApiError {
     ApiError::internal("opencode", error.to_string())
 }
 
-/// Every session across every project — the cross-project list.
-/// Every session across every project — the cross-project list. Each running
-/// session carries `active: true`, so the client can mark it without a second
-/// request.
-async fn oc_sessions(State(state): State<AppState>) -> Result<Json<serde_json::Value>, ApiError> {
+/// One page of the cross-project session list. `?cursor=` fetches the next
+/// page; the service's own page token is passed straight back to the client so
+/// it can page without knowing the shape. Each running session carries
+/// `active: true`, so the client can mark it without a second request.
+#[derive(Debug, Deserialize)]
+struct SessionsQuery {
+    cursor: Option<String>,
+}
+
+async fn oc_sessions(
+    State(state): State<AppState>,
+    Query(query): Query<SessionsQuery>,
+) -> Result<Json<serde_json::Value>, ApiError> {
     let client = state.opencode().await?;
-    let value = client.sessions(100).await.map_err(oc_error)?;
+    let value = client
+        .sessions(SESSIONS_PAGE, query.cursor.as_deref())
+        .await
+        .map_err(oc_error)?;
     let mut sessions = value.get("data").cloned().unwrap_or_else(|| json!([]));
 
     // A failure here just means nothing is marked running; the list still comes
@@ -249,6 +267,7 @@ async fn oc_sessions(State(state): State<AppState>) -> Result<Json<serde_json::V
     Ok(Json(json!({
         "version": env!("CARGO_PKG_VERSION"),
         "sessions": sessions,
+        "cursor": value.get("cursor").cloned().unwrap_or(serde_json::Value::Null),
     })))
 }
 
@@ -288,6 +307,15 @@ async fn oc_messages(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let client = state.opencode().await?;
     Ok(Json(client.messages(&id, 200).await.map_err(oc_error)?))
+}
+
+/// One session, by id.
+async fn oc_session(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let client = state.opencode().await?;
+    Ok(Json(client.session(&id).await.map_err(oc_error)?))
 }
 
 /// Delete a session and its child sessions. Destructive and irreversible.

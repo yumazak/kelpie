@@ -2,6 +2,7 @@ import type {
   OcForm,
   OcMessagesResponse,
   OcPermission,
+  OcSession,
   OcSessionsResponse,
 } from "./types";
 
@@ -21,9 +22,18 @@ async function getJson<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-/** Every session, across every project. */
-export function fetchSessions(): Promise<OcSessionsResponse> {
-  return getJson<OcSessionsResponse>("/api/sessions");
+/** One page of sessions, newest first. Pass `cursor` for the next page. */
+export function fetchSessions(cursor?: string): Promise<OcSessionsResponse> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  return getJson<OcSessionsResponse>(`/api/sessions${query}`);
+}
+
+/** One session, by id. */
+export async function fetchSession(sessionId: string): Promise<OcSession> {
+  const body = await getJson<{ data: OcSession }>(
+    `/api/sessions/${encodeURIComponent(sessionId)}`,
+  );
+  return body.data;
 }
 
 /** One session's messages. */

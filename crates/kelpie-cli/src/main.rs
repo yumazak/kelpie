@@ -155,7 +155,7 @@ fn fingerprint(path: &std::path::Path) -> Option<(u64, Option<std::time::SystemT
 
 async fn cmd_sessions(limit: u32) -> Result<()> {
     let client = OpencodeClient::discover().map_err(|error| anyhow!("{error}"))?;
-    let value = client.sessions(limit).await?;
+    let value = client.sessions(limit, None).await?;
     let sessions = value
         .get("data")
         .and_then(|data| data.as_array())
@@ -253,7 +253,7 @@ async fn cmd_doctor() -> Result<()> {
     match OpencodeClient::discover() {
         Ok(client) => {
             println!("opencode : {}", client.base_url());
-            match client.sessions(1).await {
+            match client.sessions(1, None).await {
                 Ok(value) => {
                     let count = value
                         .get("data")

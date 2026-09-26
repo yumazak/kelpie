@@ -120,11 +120,28 @@ impl OpencodeClient {
         Ok(serde_json::from_str(&text)?)
     }
 
-    /// Every session, across every project, newest first.
-    pub async fn sessions(&self, limit: u32) -> Result<Value, OpencodeError> {
+    /// Every session, across every project, newest first. `cursor` is the
+    /// opaque page token the service returns as `cursor.next`.
+    pub async fn sessions(
+        &self,
+        limit: u32,
+        cursor: Option<&str>,
+    ) -> Result<Value, OpencodeError> {
+        let mut path = format!("/api/session?limit={limit}&order=desc");
+        if let Some(cursor) = cursor {
+            // The token is base64url (URL-safe), so it needs no escaping.
+            path.push_str("&cursor=");
+            path.push_str(cursor);
+        }
+        self.json(reqwest::Method::GET, &path, None).await
+    }
+
+    /// One session, by id. Used to open the session a notification links to
+    /// when it is not on the first page of the list.
+    pub async fn session(&self, session_id: &str) -> Result<Value, OpencodeError> {
         self.json(
             reqwest::Method::GET,
-            &format!("/api/session?limit={limit}&order=desc"),
+            &format!("/api/session/{session_id}"),
             None,
         )
         .await

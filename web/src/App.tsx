@@ -1,24 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { fetchSessions } from "./api";
+import { fetchSession } from "./api";
 import { Chat } from "./components/Chat";
 import { Home } from "./components/Home";
+import { useSessions } from "./hooks/useSessions";
 import { consumePendingSession } from "./lib/push";
-import type { OcSession, OcSessionsResponse } from "./types";
-
-const SESSIONS_POLL_MS = 10000;
+import type { OcSession } from "./types";
 
 export default function App() {
-  const [state, setState] = useState<OcSessionsResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { sessions, error, loading, hasMore, loadMore, refresh } = useSessions();
   const [selected, setSelected] = useState<OcSession | null>(null);
   const openedFromUrl = useRef(false);
   const [pendingSession, setPendingSession] = useState<string | null>(null);
   // The popstate handler runs outside React, so it reads the latest list here.
-  const stateRef = useRef<OcSessionsResponse | null>(null);
+  const sessionsRef = useRef<OcSession[]>([]);
   useEffect(() => {
-    stateRef.current = state;
-  }, [state]);
+    sessionsRef.current = sessions;
+  }, [sessions]);
 
   const sessionUrl = (id: string) => `/?session=${encodeURIComponent(id)}`;
 
@@ -40,9 +38,10 @@ export default function App() {
     });
   }, []);
 
-  // Open the tapped session once the list arrives, with Home behind it.
+  // Open the tapped session once the list arrives, with Home behind it. A
+  // target that is not on the first page is fetched directly by id.
   useEffect(() => {
-    if (openedFromUrl.current || !state) return;
+    if (openedFromUrl.current || loading) return;
     const target =
       pendingSession ??
       new URLSearchParams(window.location.search).get("session");
@@ -50,18 +49,37 @@ export default function App() {
       openedFromUrl.current = true;
       return;
     }
-    const session = state.sessions.find((entry) => entry.id === target);
-    if (session) {
+    const fromList = sessions.find((entry) => entry.id === target);
+    if (fromList) {
       // A deep link lands directly on the Chat URL; rewrite the current entry
       // to Home so the back gesture has somewhere to go.
       if (new URLSearchParams(window.location.search).get("session")) {
         window.history.replaceState(null, "", "/");
       }
       // eslint-disable-next-line react/set-state-in-effect
-      openSession(session);
+      openSession(fromList);
       openedFromUrl.current = true;
+      return;
     }
-  }, [state, pendingSession, openSession]);
+    let cancelled = false;
+    void fetchSession(target)
+      .then((session) => {
+        if (cancelled) return;
+        if (new URLSearchParams(window.location.search).get("session")) {
+          window.history.replaceState(null, "", "/");
+        }
+        openSession(session);
+      })
+      .catch(() => {
+        /* the session may be gone; stay on Home */
+      })
+      .finally(() => {
+        if (!cancelled) openedFromUrl.current = true;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessions, loading, pendingSession, openSession]);
 
   // Back gesture / browser back: read the URL and follow it.
   useEffect(() => {
@@ -72,34 +90,15 @@ export default function App() {
         setSelected(null);
         return;
       }
-      const session = stateRef.current?.sessions.find((entry) => entry.id === id);
+      const session = sessionsRef.current.find((entry) => entry.id === id);
       setSelected(session ?? null);
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  const loadSessions = useCallback(async () => {
-    try {
-      const next = await fetchSessions();
-      setState(next);
-      setError(null);
-    } catch (fetchError: unknown) {
-      setError(String(fetchError));
-    }
-  }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react/set-state-in-effect
-    void loadSessions();
-    const id = window.setInterval(() => {
-      void loadSessions();
-    }, SESSIONS_POLL_MS);
-    return () => window.clearInterval(id);
-  }, [loadSessions]);
-
   if (selected) {
-    const live = state?.sessions.find((session) => session.id === selected.id);
+    const live = sessions.find((session) => session.id === selected.id);
     return (
       <Chat
         key={selected.id}
@@ -111,10 +110,13 @@ export default function App() {
 
   return (
     <Home
-      state={state}
+      sessions={sessions}
       error={error}
+      loading={loading}
+      hasMore={hasMore}
+      onLoadMore={loadMore}
       onSelect={openSession}
-      onRefresh={loadSessions}
+      onRefresh={refresh}
     />
   );
 }
