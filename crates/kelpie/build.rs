@@ -6,11 +6,11 @@
 
 fn main() {
     println!("cargo:rustc-check-cfg=cfg(has_web)");
-    let dist = std::path::Path::new("../../web/dist");
+    let dist = std::path::Path::new("web/dist");
     if dist.join("index.html").is_file() {
         println!("cargo:rustc-cfg=has_web");
     }
-    println!("cargo:rerun-if-changed=../../web/dist");
+    println!("cargo:rerun-if-changed=web/dist");
     println!("cargo:rerun-if-env-changed=KELPIE_VERSION");
 
     // The release workflow passes the git tag, so `--version` reports it even

@@ -2,21 +2,81 @@ name: release
 
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      tag_name:
-        description: Tag to release
-        required: true
+
+# release-plz creates tags and GitHub Releases with `GITHUB_TOKEN`, which does
+# not trigger other workflows. The macOS build therefore runs in this same
+# workflow, after the release job, instead of on `push: tags`.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
-  macos:
+  # Create or update the release PR (version + CHANGELOG). Never releases.
+  release-plz-pr:
+    name: release-plz (PR)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: release-plz/action@v0.5
+        with:
+          command: release-pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Release only when the release PR is merged (`release_always = false` in
+  # release-plz.toml). Creates the `vX.Y.Z` tag and the GitHub Release.
+  release-plz-release:
+    name: release-plz (release)
+    runs-on: ubuntu-latest
+    outputs:
+      created: ${{ steps.release-plz.outputs.releases_created }}
+      releases: ${{ steps.release-plz.outputs.releases }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: release-plz
+        id: release-plz
+        uses: release-plz/action@v0.5
+        with:
+          command: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Attach the binary to the release release-plz just created.
+  build-macos:
+    name: build (macOS arm64)
+    needs: release-plz-release
+    if: needs.release-plz-release.outputs.created == 'true'
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v7
+
+      - name: Read the released tag
+        id: tag
+        env:
+          RELEASES: ${{ needs.release-plz-release.outputs.releases }}
+        run: |
+          set -euo pipefail
+          tag=$(jq -r 'map(select(.package_name == "kelpie"))[0].tag' <<<"$RELEASES")
+          test -n "$tag" && test "$tag" != "null"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - uses: pnpm/action-setup@v6
         with:
@@ -26,21 +86,20 @@ jobs:
         with:
           node-version: 26
           cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
+          cache-dependency-path: crates/kelpie/web/pnpm-lock.yaml
 
       # The PWA is embedded into the binary, so it must exist before cargo.
       - name: Build the PWA
-        working-directory: web
         run: |
-          pnpm install --frozen-lockfile
-          pnpm build
+          pnpm --dir crates/kelpie/web install --frozen-lockfile
+          pnpm --dir crates/kelpie/web build
 
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Build kelpie
         env:
-          KELPIE_VERSION: ${{ github.event.inputs.tag_name || github.ref_name }}
-        run: cargo build --release -p kelpie-cli
+          KELPIE_VERSION: ${{ steps.tag.outputs.tag }}
+        run: cargo build --release -p kelpie --bin kelpie
 
       - name: Package
         run: |
@@ -50,8 +109,7 @@ jobs:
           shasum -a 256 kelpie-aarch64-apple-darwin \
             > kelpie-aarch64-apple-darwin.sha256
 
-      - uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
-          files: out/*
-          generate_release_notes: true
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ steps.tag.outputs.tag }}" out/* --clobber
