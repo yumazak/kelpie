@@ -93,6 +93,25 @@ export interface OcFileAttachment {
   description?: string;
 }
 
+/** `Prompt.SkillAttachment` — a skill attached to a user message. */
+export interface OcSkillAttachment {
+  id: string;
+  name?: string;
+  /** The inlined skill body, present once the service has expanded it. */
+  text?: string;
+}
+
+/** `Skill.Info` — one registered skill, as `/api/skill` returns it. */
+export interface OcSkill {
+  id: string;
+  name?: string;
+  description?: string;
+  /** False hides the skill from the model's available list. */
+  autoinvoke?: boolean;
+  path?: string;
+  content?: string;
+}
+
 /** `Session.Message.Info`. `type` discriminates: `user`, `assistant`, `idle`, … */
 export interface OcMessage {
   id: string;
@@ -103,7 +122,7 @@ export interface OcMessage {
   text?: string;
   files?: OcFileAttachment[];
   agents?: unknown[];
-  skills?: unknown[];
+  skills?: OcSkillAttachment[];
   /** `assistant` */
   agent?: string;
   model?: OcModel;
@@ -112,6 +131,9 @@ export interface OcMessage {
   error?: unknown;
   /** `idle` */
   outcome?: OcOutcome;
+  /** `skill` — the body the service inlined when a skill was loaded. */
+  skill?: string;
+  name?: string;
 }
 
 export interface OcMessagesResponse {

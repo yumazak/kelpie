@@ -6,7 +6,7 @@
 
 import type { ThreadMessageLike, ToolCallMessagePart } from "@assistant-ui/react";
 
-import type { OcMessage, OcPermission } from "../types";
+import type { OcMessage, OcPermission, OcSkillAttachment } from "../types";
 
 type Part = Exclude<NonNullable<ThreadMessageLike["content"]>, string>[number];
 
@@ -90,6 +90,13 @@ function fileNames(files: unknown): string[] {
     .filter(Boolean);
 }
 
+/** The display names of a user message's attached skills. History carries the
+ *  id; the name is only present on the response that admitted the message. */
+function skillNames(skills: OcSkillAttachment[] | undefined): string[] {
+  if (!Array.isArray(skills)) return [];
+  return skills.map((skill) => skill?.name?.trim() || skill?.id).filter(Boolean);
+}
+
 export function toThreadMessages(messages: OcMessage[]): ThreadMessageLike[] {
   const out: ThreadMessageLike[] = [];
 
@@ -102,6 +109,13 @@ export function toThreadMessages(messages: OcMessage[]): ThreadMessageLike[] {
       const text = typeof message.text === "string" ? message.text : "";
       const content: Part[] = [];
       if (text.trim()) content.push({ type: "text", text });
+      const skills = skillNames(message.skills);
+      if (skills.length > 0) {
+        content.push({
+          type: "text",
+          text: skills.map((name) => `🧩 ${name}`).join("\n"),
+        });
+      }
       const names = fileNames(message.files);
       if (names.length > 0) {
         content.push({
@@ -115,6 +129,29 @@ export function toThreadMessages(messages: OcMessage[]): ThreadMessageLike[] {
         role: "user",
         createdAt,
         content,
+      });
+      return;
+    }
+
+    // The service appends a `skill` message when a skill is loaded (the model's
+    // `skill` tool, or one attached to a prompt). Render it as a tool call, so
+    // the card shows the skill id and opens to reveal the inlined body.
+    if (message.type === "skill") {
+      const id = message.skill ?? message.name ?? "skill";
+      out.push({
+        id: `a-${message.id ?? index}`,
+        role: "assistant",
+        createdAt,
+        content: [
+          {
+            type: "tool-call",
+            toolCallId: message.id ?? `skill-${index}`,
+            toolName: "skill",
+            args: { id },
+            argsText: JSON.stringify({ id }),
+            result: message.text,
+          } as Part,
+        ],
       });
       return;
     }
