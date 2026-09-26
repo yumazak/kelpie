@@ -165,6 +165,23 @@ export function Chat({
     [queryClient, session.id],
   );
 
+  // Returning to the foreground — e.g. a notification tap while this session
+  // was already on screen, so `Chat` never remounted — must show the latest
+  // turns, so resync.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      void invalidateMessages();
+      void invalidateDock();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [invalidateMessages, invalidateDock]);
+
   const { live, running } = useLiveMessage(
     session.id,
     invalidateMessages,

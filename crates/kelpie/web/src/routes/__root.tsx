@@ -15,16 +15,29 @@ function Root() {
 
   // A notification tap opens `/sessions/<id>`, but iOS may launch the installed
   // PWA at its start URL and drop the path; the service worker stashes the id
-  // in Cache Storage, and we follow it here.
+  // in Cache Storage. Follow it at startup and whenever the app returns to the
+  // foreground — the tap that woke it may have happened while it was suspended.
   useEffect(() => {
-    void consumePendingSession().then((id) => {
-      if (id) {
-        void navigate({
-          to: "/sessions/$sessionId",
-          params: { sessionId: id },
-        });
-      }
-    });
+    const follow = () => {
+      void consumePendingSession().then((id) => {
+        if (id) {
+          void navigate({
+            to: "/sessions/$sessionId",
+            params: { sessionId: id },
+          });
+        }
+      });
+    };
+    follow();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") follow();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
   }, [navigate]);
 
   // A cold deep link should leave the list behind it, so the back gesture
