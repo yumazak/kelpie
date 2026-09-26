@@ -12,6 +12,7 @@ import {
   fetchPermissions,
   fetchSession,
   fetchSessions,
+  fetchSkills,
 } from "../api";
 
 export const sessionsKey = ["sessions"] as const;
@@ -19,6 +20,7 @@ export const sessionKey = (id: string) => ["session", id] as const;
 export const messagesKey = (id: string) => ["messages", id] as const;
 export const permissionsKey = (id: string) => ["permissions", id] as const;
 export const formsKey = (id: string) => ["forms", id] as const;
+export const skillsKey = (directory: string) => ["skills", directory] as const;
 
 /** The cross-project list, newest first, paged through opencode's cursor. */
 export const sessionsQuery = infiniteQueryOptions({
@@ -50,4 +52,13 @@ export const formsQuery = (id: string) =>
   queryOptions({
     queryKey: formsKey(id),
     queryFn: () => fetchForms(id),
+  });
+
+/** The skills offered for a project. They come from disk and change rarely, so
+ *  they are cached rather than refetched on every composer open. */
+export const skillsQuery = (directory: string) =>
+  queryOptions({
+    queryKey: skillsKey(directory),
+    queryFn: () => fetchSkills(directory || undefined),
+    staleTime: 5 * 60 * 1000,
   });

@@ -4,6 +4,7 @@ import type {
   OcPermission,
   OcSession,
   OcSessionsResponse,
+  OcSkill,
 } from "./types";
 
 /** The API is same-origin; the dev server proxies `/api` to `kelpie serve`. */
@@ -50,18 +51,35 @@ export interface PromptFile {
   description?: string;
 }
 
-/** Send a prompt to a session, with optional attachments. */
+/** An opencode `Prompt.SkillAttachment`: the skill's id. */
+export interface PromptSkill {
+  id: string;
+}
+
+/** The skills registered for a project directory. Skills are scoped to where
+ *  the session runs, so it passes its own `location.directory`. */
+export async function fetchSkills(directory?: string): Promise<OcSkill[]> {
+  const query = directory ? `?directory=${encodeURIComponent(directory)}` : "";
+  const body = await getJson<{ data: OcSkill[] }>(`/api/skills${query}`);
+  return body.data ?? [];
+}
+
+/** Send a prompt to a session, with optional attachments and attached skills. */
 export async function sendPrompt(
   sessionId: string,
   text: string,
   files: PromptFile[] = [],
+  skills: PromptSkill[] = [],
 ): Promise<void> {
+  const payload: Record<string, unknown> = { text };
+  if (files.length > 0) payload.files = files;
+  if (skills.length > 0) payload.skills = skills;
   const response = await fetch(
     `/api/sessions/${encodeURIComponent(sessionId)}/prompt`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(files.length > 0 ? { text, files } : { text }),
+      body: JSON.stringify(payload),
     },
   );
   if (response.ok) return;
