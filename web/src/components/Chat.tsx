@@ -33,9 +33,10 @@ import { ErrorState } from "./ErrorState";
 import { HarnessDock } from "./HarnessDock";
 import { RuntimeProvider } from "./RuntimeProvider";
 
-/** Fallback poll: the live event stream is primary, but a missed event (a
- *  reconnect, a dropped frame) is healed here within a couple of seconds. */
-const POLL_MS = 2000;
+/** Fallback poll: the live event stream is primary; the stream also resyncs on
+ *  (re)connect. This is only a slow watchdog for a stream that reported no
+ *  error but stopped delivering. */
+const POLL_MS = 10000;
 
 /**
  * An empty assistant message marked as running. assistant-ui's `GroupedParts`
@@ -137,7 +138,7 @@ export function Chat({
     void refreshDock();
     const id = window.setInterval(() => {
       void refreshDock();
-    }, 3000);
+    }, 10000);
     return () => window.clearInterval(id);
   }, [refreshDock]);
 

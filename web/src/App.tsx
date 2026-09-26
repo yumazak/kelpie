@@ -6,7 +6,7 @@ import { Home } from "./components/Home";
 import { consumePendingSession } from "./lib/push";
 import type { OcSession, OcSessionsResponse } from "./types";
 
-const SESSIONS_POLL_MS = 3000;
+const SESSIONS_POLL_MS = 10000;
 
 export default function App() {
   const [state, setState] = useState<OcSessionsResponse | null>(null);

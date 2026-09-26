@@ -32,6 +32,14 @@ export function useLiveMessage(
       `/api/events?session=${encodeURIComponent(sessionId)}`,
     );
 
+    // A (re)connect may have missed events while the stream was down; pull the
+    // authoritative state once so the gap heals without a fast poll.
+    const resync = () => {
+      void onStepEnd();
+      onDockEvent();
+    };
+    source.addEventListener("open", resync);
+
     const rebuild = () => {
       const content = [...parts.current.values()].map(partOf);
       if (content.length === 0) {
