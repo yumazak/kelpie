@@ -1,125 +1,135 @@
 ---
-title: 設計
-description: opencode v2 を一クライアントとして使うときの設計と、その理由。
+title: Design
+description: How kelpie is designed around opencode v2, and why.
 ---
 
-> opencode v2 のサーバを、Tailscale 越しにスマホのチャットアプリとして操作する。
-> Australian Kelpie（犬）より命名。
+> Drive an opencode server from your phone as a chat app, over Tailscale.
+> Named after the Australian Kelpie (a dog).
 
-## 0. 決定事項
+## 0. Decisions
 
-| 論点 | 決定 |
+| Question | Decision |
 | --- | --- |
-| 対象 | **opencode v2 専用**。herdr も他ハーネスも使わない |
-| 実装 | **Rust（bridge / CLI）+ TypeScript（web）** |
-| 統合面 | opencode v2 の **HTTP API + SSE**（画面スクレイプ・ログ解析・キー送信なし） |
-| UI | ChatGPT 風モバイル GUI（assistant-ui）。ダーク固定 |
-| 一覧 | **全プロジェクト横断**（`GET /api/session`） |
-| ダイアログ | permission / form を API で構造的に回答 |
-| 通知 | Web Push（VAPID）。`permission.asked` / `form.created` / `session.execution.*` |
-| 公開 | OSS（MIT） |
+| Target | **opencode v2 only**. Not herdr, not any other harness |
+| Implementation | **Rust (bridge / CLI) + TypeScript (web)** |
+| Integration surface | opencode v2's **HTTP API + SSE** (no screen scraping, no log parsing, no keystrokes) |
+| UI | ChatGPT-style mobile GUI (assistant-ui). Dark, always |
+| Session list | **Across every project** (`GET /api/session`) |
+| Dialogs | Answer permissions and forms structurally, through the API |
+| Notifications | Web Push (VAPID). `permission.asked` / `form.created` / `session.execution.*` |
+| License | Open source (MIT) |
 
-## 1. なぜ opencode だけなのか
+## 1. Why opencode only
 
-opencode v2 は **サーバ + クライアント**の構造で、TUI も web も IDE プラグインも
-同じサーバのクライアントにすぎない。つまり外部クライアントに必要なものが全部ある:
+opencode v2 is a **server plus clients**: the TUI, the web UI and the IDE plugins are
+all just clients of the same server. That means everything an external client needs is
+already there:
 
-| 必要なこと | opencode v2 の API |
+| What you need | opencode v2's API |
 | --- | --- |
-| セッション一覧（全プロジェクト） | `GET /api/session` |
-| 会話（構造化） | `GET /api/session/{id}/message` |
-| ストリーミング | `GET /api/event`（`session.text.delta` 等） |
-| 送信 | `POST /api/session/{id}/prompt` |
-| 権限 | `GET /api/session/{id}/permission` / `POST .../reply` |
-| 質問（form） | `GET /api/session/{id}/form` / `POST .../reply` |
+| Session list (all projects) | `GET /api/session` |
+| Conversation (structured) | `GET /api/session/{id}/message` |
+| Streaming | `GET /api/event` (`session.text.delta` and friends) |
+| Sending | `POST /api/session/{id}/prompt` |
+| Permissions | `GET /api/session/{id}/permission` / `POST .../reply` |
+| Questions (forms) | `GET /api/session/{id}/form` / `POST .../reply` |
 
-TUI 専用のハーネス（claude / codex / pi）は、画面を読んでキーを送るしかなく、
-ストリーミングも構造化ダイアログも得られない。opencode はそれが要らないので、
-**同じ目的なら圧倒的に綺麗に作れる**。herdr（マルチプレクサ）も、opencode が
-サーバとして検知・所有・API を提供するため不要になった。
+TUI-only harnesses (claude / codex / pi) can only read the screen and send keystrokes,
+which gets you neither streaming nor structured dialogs. opencode makes that
+unnecessary, so **the same goal takes far less machinery**. herdr (a multiplexer) is
+also gone: opencode detects, owns and exposes the server itself.
 
-## 2. 全体アーキテクチャ
+## 2. Architecture
 
 ```
-   スマホ / タブレット (PWA)
-        │  HTTPS (tailnet 限定)          https://kelpie.<tailnet>.ts.net
+   phone / tablet (PWA)
+        │  HTTPS (tailnet only)          https://kelpie.<tailnet>.ts.net
         ▼
-   tailscale serve            TLS 終端（loopback へ proxy）
-        │  127.0.0.1:7180      kelpie は loopback のみ bind
+   tailscale serve            TLS termination (proxies to loopback)
+        │  127.0.0.1:7180      kelpie binds loopback only
         ▼
-   kelpie (Rust, 単一バイナリ)
-     ├─ 静的 PWA (crates/kelpie/web/dist) + JSON API
-     ├─ opencode client : Basic 認証で /api/* を叩く
-     ├─ event bridge    : GET /api/event (SSE) を常時購読 → ブラウザへ中継
-     ├─ push            : VAPID + 購読ストア + Web Push
-     └─ 状態            : ~/.local/state/kelpie/push.json
-        │  HTTP (127.0.0.1:49374 等)
+   kelpie (Rust, one binary)
+     ├─ static PWA (web/dist) + JSON API
+     ├─ opencode client : calls /api/* with Basic auth
+     ├─ event bridge    : subscribes to GET /api/event (SSE) → relays to the browser
+     ├─ push            : VAPID + subscription store + Web Push
+     └─ state           : ~/.local/state/kelpie/push.json
+        │  HTTP (127.0.0.1:49374 and up)
         ▼
-   opencode v2 バックグラウンドサービス
-     └─ 全プロジェクトのセッションを所有。TUI/web/kelpie はそのクライアント
+   opencode v2 background service
+     └─ owns every project's sessions. The TUI, the web UI and kelpie are all clients
 ```
 
-- **kelpie は opencode の一クライアント**。プロセスも PTY も所有しない。
-- ターミナルの TUI と**同じセッションを同時に見られる**（どちらもサーバのクライアント）。
-- 通知はプロンプトの出どころ（スマホ / ターミナル / CLI）に依存しない。
+- **kelpie is one client of opencode**. It owns no process and no PTY.
+- You can watch **the same session** in the terminal and on your phone at once — both
+  are clients of the server.
+- Notifications do not care where the prompt came from (phone, terminal or CLI).
 
-## 3. opencode との接続
+## 3. Talking to opencode
 
-- **URL**: `opencode service status` が `http://127.0.0.1:<port>` を返す（ポートは再起動で変わるので30秒で再探索）
-- **認証**: `~/.config/opencode/service.json` の `password` で Basic 認証（ユーザ名は `opencode`）
-- **イベント**: `GET /api/event` は SSE。`data: {...}\n\n` を読み、`type` で振り分ける
+- **URL**: `opencode service status` prints `http://127.0.0.1:<port>` (the port changes
+  on restart, so it is re-discovered every 30 seconds)
+- **Auth**: Basic auth with the `password` from `~/.config/opencode/service.json`
+  (the username is `opencode`)
+- **Events**: `GET /api/event` is SSE. Read `data: {...}\n\n` and dispatch on `type`
 
-主なイベント:
+The events that matter:
 
-| イベント | 用途 |
+| Event | Used for |
 | --- | --- |
-| `session.text.started` / `.delta` / `.ended` | 本文のストリーミング |
-| `session.reasoning.*` | 思考のストリーミング |
-| `session.tool.*` | ツール呼び出し |
-| `session.execution.succeeded` / `.failed` | ターン完了（通知） |
-| `permission.asked` | 権限待ち（通知 + dock） |
-| `form.created` | 質問（通知 + dock） |
+| `session.text.started` / `.delta` / `.ended` | streaming the reply |
+| `session.reasoning.*` | streaming the model's reasoning |
+| `session.tool.*` | tool calls |
+| `session.execution.succeeded` / `.failed` | turn finished (notify) |
+| `permission.asked` | permission prompt (notify + dock) |
+| `form.created` | question (notify + dock) |
 
 ## 4. UI
 
-- **Home**: 全セッションを**ディレクトリ（プロジェクト）別**に一覧。状態ドット、相対時刻。
-- **Chat**: assistant-ui の styled `Thread`。会話は opencode のメッセージをそのまま描画
-  （`user` → バブル、`assistant` の `text` → markdown、`reasoning` → 折りたたみ、`tool` → カード）。
-- **ストリーミング**: `session.text.delta` を積んで進行中の発言を描画。`step.ended` で
-  権威ある一覧を再取得。2秒ポーリングはフォールバック。
-- **HarnessDock**: composer の上に固定。
-  - permission → 「許可 / 常に許可 / 拒否」
-  - form → フィールド（string / number / boolean / multiselect）を描画
-- **スキル**: composer のピッカーから、そのセッションの directory に効くスキル
-  （`GET /api/skill`、`location[directory]` で絞る）を選び、次の送信に
-  `skills: [{ id }]` として添付する。選んだスキルは composer 上のチップに出す。
-  読み込みは `skill` メッセージとしてツールカードで見える（`convert.ts`）。
+- **Home**: every session, grouped by **directory (project)**. Status dot, relative time.
+- **Chat**: assistant-ui's styled `Thread`. Conversations render opencode's messages as
+  they are (`user` → bubble, assistant `text` → markdown, `reasoning` → collapsible,
+  `tool` → card).
+- **Streaming**: accumulate `session.text.delta` and render the reply as it arrives.
+  Re-fetch the authoritative list on `step.ended`. A 2-second poll is the fallback.
+- **HarnessDock**: pinned above the composer.
+  - permission → “Allow / Always allow / Deny”
+  - form → renders the fields (string / number / boolean / multiselect)
+- **Skills**: from the composer's picker, choose a skill that applies to the session's
+  directory (`GET /api/skill`, filtered by `location[directory]`) and attach it to the
+  next message as `skills: [{ id }]`. Chosen skills show up as chips above the composer.
+  Loading a skill shows up as a `skill` message in a tool card (`convert.ts`).
 
-## 5. 通知
+## 5. Notifications
 
-- **VAPID** 鍵は初回起動時に生成（`p256`、`~/.local/state/kelpie/push.json`）
-- 端末の購読を保存し、`web-push` で送信（`urgency: high`、TTL 6h、404/410 は破棄）
-- トリガ: `permission.asked` / `form.created` / `session.execution.succeeded` / `.failed`
-- 本文に**何を聞かれているか**を載せる（権限は action + resources、form は質問）
-- タップで対象セッションを開く。iOS は URL クエリを落とすことがあるので、
-  SW が Cache Storage にセッションIDを置き、起動時にアプリが読む
+- The **VAPID** key pair is generated on first start (`p256`,
+  `~/.local/state/kelpie/push.json`)
+- Device subscriptions are stored and sent to with `web-push` (`urgency: high`, TTL 6h;
+  404/410 responses drop the subscription)
+- Triggers: `permission.asked` / `form.created` / `session.execution.succeeded` /
+  `.failed`
+- The body says **what is being asked** (for permissions: action + resources; for
+  forms: the question)
+- Tapping a notification opens that session. iOS sometimes drops URL query strings, so
+  the service worker stashes the session ID in Cache Storage and the app reads it on
+  start
 
-## 6. セットアップ / 運用
+## 6. Setup / operations
 
 ```bash
 cargo build --release
-pnpm --dir crates/kelpie/web install
-pnpm --dir crates/kelpie/web build
-./target/release/kelpie serve --port 7180 --static-dir "$PWD/crates/kelpie/web/dist"
+cd web && pnpm install && pnpm build && cd ..
+./target/release/kelpie serve --port 7180 --static-dir "$PWD/web/dist"
 ```
 
-- opencode のサービスが動いていること（`opencode service start` / TUI 起動）
-- `tailscale serve` で loopback を tailnet に公開（kelpie 自身は設定しない）
-- 通知はスマホで「通知を有効にする」をタップ（iOS はホーム画面追加が必須）
+- opencode has to be running (`opencode service start` / starting the TUI)
+- publish loopback to your tailnet with `tailscale serve` (kelpie does not configure it)
+- on your phone, tap “Enable notifications” (on iOS you have to add it to the home
+  screen first)
 
-## 7. セキュリティ
+## 7. Security
 
-- kelpie は **`127.0.0.1` のみ bind**。front door は `tailscale serve`
-- opencode の Basic 認証情報は kelpie が読むだけで、ブラウザには渡さない
-- PWA の pane 出力は React のテキストノードとして描画（`innerHTML` 禁止）
-- `tailscale funnel` は禁止
+- kelpie binds **`127.0.0.1` only**. The front door is `tailscale serve`
+- opencode's Basic credentials are read by kelpie and never handed to the browser
+- Pane output from the PWA is rendered as React text nodes (`innerHTML` is banned)
+- `tailscale funnel` is not allowed

@@ -7,15 +7,24 @@ import { base, site } from './site.config.mjs';
 export default defineConfig({
 	site,
 	base,
+	// Locale URLs are directories, and sidebar/content links inside a locale are
+	// relative to the current page, so the slash-less form must redirect: without
+	// it, `/kelpie/ja` would render a page whose links point at `/kelpie/...`
+	// (the English pages) instead of `/kelpie/ja/...`.
+	trailingSlash: 'always',
 	integrations: [
 		starlight({
 			title: 'kelpie',
 			description:
-				'opencode のサーバを、Tailscale 越しにスマホのチャットアプリとして操作する。',
-			// The site is Japanese, so `root` is the Japanese locale: pages stay
-			// directly in `src/content/docs/`, with no language directory.
+				'Drive an opencode server from your phone as a chat app, over Tailscale.',
+			// English is the root locale: its pages stay directly in
+			// `src/content/docs/`, everything else lives in `src/content/docs/<locale>/`.
+			// Adding a language means adding a directory and a line here.
 			defaultLocale: 'root',
-			locales: { root: { label: '日本語', lang: 'ja' } },
+			locales: {
+				root: { label: 'English', lang: 'en' },
+				ja: { label: '日本語', lang: 'ja' },
+			},
 			logo: { src: './src/assets/kelpie.svg', alt: 'kelpie' },
 			favicon: '/favicon.svg',
 			social: [
@@ -27,14 +36,13 @@ export default defineConfig({
 			],
 			// Same typeface as the PWA (`web/src/index.css`).
 			customCss: ['@fontsource-variable/geist', './src/styles/custom.css'],
-			// Generated pages override this with the root file they came from.
 			editLink: {
 				baseUrl: 'https://github.com/yumazak/kelpie/edit/main/docs/',
 			},
 			lastUpdated: true,
 			sidebar: [
-				{ label: 'はじめに', items: ['guide'] },
-				{ label: '設計', items: ['design'] },
+				{ label: 'Guide', translations: { ja: '使い方' }, items: ['guide'] },
+				{ label: 'Design', translations: { ja: '設計' }, items: ['design'] },
 			],
 		}),
 	],
