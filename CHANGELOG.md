@@ -13,13 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 設定ページを追加し、通知をヘッダーから移す
 
+### Changed
+
+- 画面遷移にフェード・先読み・pending 表示を入れる
+
 ### Fixed
 
 - *(web)* resync on foreground so a notification tap shows the latest
-
-### Other
-
-- Merge pull request #19 from yumazak/feature/nav-ux
 
 ## [0.1.27](https://github.com/yumazak/kelpie/compare/v0.1.26...v0.1.27) - 2026-09-26
 
