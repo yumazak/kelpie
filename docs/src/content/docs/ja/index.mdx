@@ -1,0 +1,41 @@
+---
+title: kelpie
+description: opencode のサーバを、Tailscale 越しにスマホのチャットアプリとして操作する。
+template: splash
+hero:
+  tagline: opencode のサーバを、Tailscale 越しにスマホのチャットアプリとして操作する。
+  actions:
+    - text: はじめる
+      link: guide/
+      icon: right-arrow
+    - text: 設計を読む
+      link: design/
+      icon: open-book
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+opencode v2 の HTTP API だけを使う、tailnet 限定のモバイルクライアントです。プロセス
+も PTY も持たず、ターミナルの TUI と同じセッションを見に行きます。
+
+<CardGrid stagger>
+	<Card title="全プロジェクト横断" icon="list-format">
+		opencode の全プロジェクトのセッションを、ひとつの一覧から開けます。
+	</Card>
+	<Card title="トークン単位のストリーミング" icon="comment">
+		`GET /api/event` の SSE を中継し、ChatGPT のように文字が流れます。
+	</Card>
+	<Card title="権限と質問に回答" icon="approve-check-circle">
+		許可待ちもフォーム入力も、構造化 API で返します。
+	</Card>
+	<Card title="Web Push 通知" icon="rocket">
+		許可待ち・質問・完了を、スマホの通知で受け取れます。
+	</Card>
+	<Card title="動かす" icon="setting">
+		<a href="guide/">マシンに入れて、Tailscale から開く</a>
+	</Card>
+	<Card title="設計" icon="open-book">
+		<a href="design/">opencode だけを対象にした理由と、全体の構成</a>
+	</Card>
+</CardGrid>
