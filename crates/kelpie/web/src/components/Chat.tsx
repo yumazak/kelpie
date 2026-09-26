@@ -58,7 +58,7 @@ const POLL_MS = 10000;
  * token lands.
  */
 const THINKING: ThreadMessageLike = {
-  id: "live",
+  id: "thinking",
   role: "assistant",
   status: { type: "running" },
   content: [],
@@ -277,10 +277,18 @@ export function Chat({
   );
 
   const isRunning = running || session.active === true;
+  // The live overlay can hold only reasoning while the model thinks. Keep the
+  // "考え中" indicator on screen until visible text starts, so a turn does not
+  // look idle (or finished) during the reasoning phase.
+  const liveText =
+    live &&
+    Array.isArray(live.content) &&
+    live.content.some((part) => part.type === "text" && part.text);
   const rendered = [
     ...withApprovals,
     ...(optimistic ? [optimistic] : []),
-    ...(live ? [live] : isRunning ? [THINKING] : []),
+    ...(live ? [live] : []),
+    ...(isRunning && !liveText ? [THINKING] : []),
   ];
 
   // The running indicator, the stop button and the permission approvals are
