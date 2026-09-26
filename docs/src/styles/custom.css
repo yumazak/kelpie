@@ -1,0 +1,5 @@
+/* The docs share the PWA's typeface (`web/src/index.css`). Everything else is
+   Starlight's own theme, whose neutral palette already matches the app. */
+:root {
+	--sl-font: 'Geist Variable', system-ui, sans-serif;
+}
