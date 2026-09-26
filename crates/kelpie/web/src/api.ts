@@ -8,19 +8,23 @@ import type {
   OcSkill,
 } from "./types";
 
+/** The bridge answers a failure with `{ code, message }`; anything else keeps
+ *  its status line. */
+async function failure(response: Response): Promise<Error> {
+  let detail = `${response.status} ${response.statusText}`;
+  try {
+    const body = (await response.json()) as { code?: string; message?: string };
+    detail = [body.code, body.message].filter(Boolean).join(": ") || detail;
+  } catch {
+    /* not JSON — keep the status line */
+  }
+  return new Error(detail);
+}
+
 /** The API is same-origin; the dev server proxies `/api` to `kelpie serve`. */
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(path);
-  if (!response.ok) {
-    let detail = `${response.status} ${response.statusText}`;
-    try {
-      const body = (await response.json()) as { code?: string; message?: string };
-      detail = [body.code, body.message].filter(Boolean).join(": ") || detail;
-    } catch {
-      /* not JSON — keep the status line */
-    }
-    throw new Error(detail);
-  }
+  if (!response.ok) throw await failure(response);
   return (await response.json()) as T;
 }
 
@@ -99,14 +103,7 @@ export async function sendPrompt(
     },
   );
   if (response.ok) return;
-  let detail = `${response.status} ${response.statusText}`;
-  try {
-    const body = (await response.json()) as { code?: string; message?: string };
-    detail = [body.code, body.message].filter(Boolean).join(": ") || detail;
-  } catch {
-    /* keep the status line */
-  }
-  throw new Error(detail);
+  throw await failure(response);
 }
 
 /** Interrupt the running turn. */
@@ -133,14 +130,7 @@ export async function deleteSession(sessionId: string): Promise<void> {
     { method: "DELETE" },
   );
   if (response.ok) return;
-  let detail = `${response.status} ${response.statusText}`;
-  try {
-    const body = (await response.json()) as { code?: string; message?: string };
-    detail = [body.code, body.message].filter(Boolean).join(": ") || detail;
-  } catch {
-    /* keep the status line */
-  }
-  throw new Error(detail);
+  throw await failure(response);
 }
 
 /** Pending permission requests for a session. */
@@ -168,14 +158,7 @@ async function postJson(path: string, body: unknown): Promise<void> {
     body: JSON.stringify(body),
   });
   if (response.ok) return;
-  let detail = `${response.status} ${response.statusText}`;
-  try {
-    const parsed = (await response.json()) as { code?: string; message?: string };
-    detail = [parsed.code, parsed.message].filter(Boolean).join(": ") || detail;
-  } catch {
-    /* keep the status line */
-  }
-  throw new Error(detail);
+  throw await failure(response);
 }
 
 /** `decision` is `once` / `always` / `reject`. */
@@ -213,4 +196,13 @@ export function subscribePush(subscription: {
   keys: { p256dh: string; auth: string };
 }): Promise<void> {
   return postJson("/api/push/subscribe", subscription);
+}
+
+/** Send one test push to every device the bridge holds. The count comes back so
+ *  the page can say "0 台" rather than imply a phone just buzzed. */
+export async function sendTestPush(): Promise<number> {
+  const response = await fetch("/api/push/test", { method: "POST" });
+  if (!response.ok) throw await failure(response);
+  const body = (await response.json()) as { subscriptions?: number };
+  return body.subscriptions ?? 0;
 }

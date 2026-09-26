@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { EllipsisVertical } from "lucide-react";
+import { EllipsisVertical, Settings } from "lucide-react";
 import {
   AssistantRuntimeProvider,
   ThreadListItemPrimitive,
@@ -32,7 +32,6 @@ import { deleteSession } from "../api";
 import { isUnread } from "../lib/read";
 import type { OcProject, OcSession } from "../types";
 import { ErrorState } from "./ErrorState";
-import { NotifyButton } from "./NotifyButton";
 import { Dots } from "./loading-ui/dots";
 import { Skeleton } from "./ui/skeleton";
 
@@ -152,6 +151,7 @@ export function Home({
   onLoadMore,
   onSelect,
   onRefresh,
+  onOpenSettings,
 }: {
   sessions: OcSession[];
   /** Repository names, keyed by `projectID`. Empty until `/api/projects` lands,
@@ -163,6 +163,7 @@ export function Home({
   onLoadMore: () => Promise<void>;
   onSelect: (session: OcSession) => void;
   onRefresh: () => Promise<void>;
+  onOpenSettings: () => void;
 }) {
   const [pendingDelete, setPendingDelete] = useState<OcSession | null>(null);
   const [busy, setBusy] = useState(false);
@@ -254,7 +255,14 @@ export function Home({
     <div className="mx-auto h-full max-w-2xl overflow-y-auto px-4 py-5">
       <header className="mb-4 flex items-center justify-between">
         <KelpieMark className="h-9 w-9" />
-        <NotifyButton />
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          aria-label="設定"
+          className="-mr-2 flex size-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <Settings className="size-5" />
+        </button>
       </header>
 
       {sessions.length === 0 ? (
