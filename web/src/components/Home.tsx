@@ -128,6 +128,15 @@ export function Home({
     return latest(b[1]) - latest(a[1]);
   });
 
+  // assistant-ui builds its thread-list runtime once, at mount, from the
+  // threads it is handed, and only syncs a new set afterwards (in an effect).
+  // Rendering a larger set before that sync would index past the runtime and
+  // throw. Remount whenever the displayed set changes, so the runtime always
+  // matches what is on screen.
+  const listKey = ordered
+    .flatMap(([, sessions]) => sessions.map((session) => session.id))
+    .join("|");
+
   const confirmDelete = async () => {
     if (!pendingDelete) return;
     setBusy(true);
@@ -173,7 +182,7 @@ export function Home({
         </div>
       ) : (
         <MoreContext.Provider value={openMenu}>
-          <HomeThreadList groups={ordered} onSelect={onSelect} />
+          <HomeThreadList key={listKey} groups={ordered} onSelect={onSelect} />
         </MoreContext.Provider>
       )}
 
