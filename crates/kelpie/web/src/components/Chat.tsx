@@ -22,6 +22,7 @@ import {
   replyForm,
   replyPermission,
   sendPrompt,
+  viewSession,
   type PromptFile,
 } from "../api";
 import { useLiveMessage } from "../hooks/useLiveMessage";
@@ -30,6 +31,7 @@ import {
   type AttachedSkill,
 } from "../lib/composer-skills";
 import { attachApprovals, toThreadMessages } from "../lib/convert";
+import { isUnread } from "../lib/read";
 import {
   formsKey,
   formsQuery,
@@ -37,6 +39,7 @@ import {
   messagesQuery,
   permissionsKey,
   permissionsQuery,
+  sessionsKey,
 } from "../lib/queries";
 import type { OcSession } from "../types";
 import { ErrorState } from "./ErrorState";
@@ -132,6 +135,29 @@ export function Chat({
       setOptimistic(null);
     }
   }, [messages]);
+
+  // Mark the session read while it is on screen: once for the turn it was
+  // opened on, and again whenever a turn finishes while we are looking. A
+  // session with no completed turn has nothing to mark. opencode shares
+  // `time.viewed`, so this clears the marker for other clients too.
+  const idle = session.time?.idle;
+  const unread = isUnread(session);
+  useEffect(() => {
+    if (!unread || idle === undefined) return;
+    let cancelled = false;
+    void viewSession(session.id, idle)
+      .then(() => {
+        if (!cancelled) {
+          void queryClient.invalidateQueries({ queryKey: sessionsKey });
+        }
+      })
+      .catch(() => {
+        /* best effort — opening the session again retries */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [unread, idle, session.id, queryClient]);
 
   const invalidateMessages = useCallback(
     () => queryClient.invalidateQueries({ queryKey: messagesKey(session.id) }),

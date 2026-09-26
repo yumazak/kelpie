@@ -46,6 +46,9 @@ export interface OcSession {
   cost?: number;
   /** True while a turn is in flight (merged from `/api/session/active`). */
   active?: boolean;
+  /** Set while the session waits on the user: a permission prompt or a form
+   *  (merged from the location's pending permissions/forms). */
+  pending?: "permission" | "form" | null;
 }
 
 /** One project (repository), as kelpie's `/api/projects` names it. */

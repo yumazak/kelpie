@@ -105,6 +105,7 @@ pub fn router(state: AppState, static_dir: Option<PathBuf>) -> Router {
         )
         .route("/api/sessions/{id}/prompt", post(oc_prompt))
         .route("/api/sessions/{id}/interrupt", post(oc_interrupt))
+        .route("/api/sessions/{id}/view", post(oc_view))
         .route("/api/sessions/{id}/permissions", get(oc_permissions))
         .route("/api/sessions/{id}/forms", get(oc_forms))
         .route(
@@ -268,11 +269,96 @@ async fn oc_sessions(
         }
     }
 
+    // Pending confirmations (permissions, forms), so the list can flag a
+    // session that is waiting on the user. Also location-scoped, so this asks
+    // once per directory on the page.
+    let pending = pending_by_session(&client, &sessions).await;
+    if let Some(list) = sessions.as_array_mut() {
+        for session in list {
+            if let Some(id) = session.get("id").and_then(|value| value.as_str()) {
+                session["pending"] = match pending.get(id) {
+                    Some(Pending::Permission) => json!("permission"),
+                    Some(Pending::Form) => json!("form"),
+                    None => Value::Null,
+                };
+            }
+        }
+    }
+
     Ok(Json(json!({
         "version": env!("CARGO_PKG_VERSION"),
         "sessions": sessions,
         "cursor": value.get("cursor").cloned().unwrap_or(serde_json::Value::Null),
     })))
+}
+
+/// A session blocked on the user: a permission prompt or a form.
+#[derive(Clone, Copy)]
+enum Pending {
+    Permission,
+    Form,
+}
+
+/// The pending confirmation for each session on a page, by session id. opencode
+/// scopes permissions and forms by location (the directory a session runs in),
+/// so this asks once per distinct directory, concurrently. A lookup that fails
+/// — a directory the service no longer knows — simply contributes nothing.
+async fn pending_by_session(client: &OpencodeClient, sessions: &Value) -> HashMap<String, Pending> {
+    let mut directories: Vec<String> = Vec::new();
+    if let Some(list) = sessions.as_array() {
+        for session in list {
+            if let Some(directory) = session
+                .get("location")
+                .and_then(|location| location.get("directory"))
+                .and_then(Value::as_str)
+                && !directories.iter().any(|known| known == directory)
+            {
+                directories.push(directory.to_string());
+            }
+        }
+    }
+
+    let mut tasks = Vec::with_capacity(directories.len());
+    for directory in directories {
+        let client = client.clone();
+        tasks.push(tokio::spawn(async move {
+            pending_for_directory(&client, &directory).await
+        }));
+    }
+
+    let mut pending = HashMap::new();
+    for task in tasks {
+        for (id, kind) in task.await.unwrap_or_default() {
+            // A session lives in one directory, so this only decides the odd
+            // case of both pending at once; the permission wins.
+            pending.entry(id).or_insert(kind);
+        }
+    }
+    pending
+}
+
+/// The pending permissions and forms raised in one directory, as session ids.
+async fn pending_for_directory(client: &OpencodeClient, directory: &str) -> Vec<(String, Pending)> {
+    let mut found = Vec::new();
+    if let Ok(value) = client.pending_permissions(directory).await {
+        collect_sessions(&value, Pending::Permission, &mut found);
+    }
+    if let Ok(value) = client.pending_forms(directory).await {
+        collect_sessions(&value, Pending::Form, &mut found);
+    }
+    found
+}
+
+/// Pull the `sessionID` of each item in a list response into `out`.
+fn collect_sessions(value: &Value, kind: Pending, out: &mut Vec<(String, Pending)>) {
+    let Some(items) = value.get("data").and_then(Value::as_array) else {
+        return;
+    };
+    for item in items {
+        if let Some(id) = item.get("sessionID").and_then(Value::as_str) {
+            out.push((id.to_string(), kind));
+        }
+    }
 }
 
 /// Every project, each named by its repository. opencode groups the worktrees
@@ -454,6 +540,27 @@ async fn oc_interrupt(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let client = state.opencode().await?;
     Ok(Json(client.interrupt_session(&id).await.map_err(oc_error)?))
+}
+
+/// Mark a session's latest observed idle transition as viewed, so it reads as
+/// "read" in the list. The client sends the `time.idle` it displayed.
+#[derive(Debug, Deserialize)]
+struct ViewBody {
+    idle: f64,
+}
+
+async fn oc_view(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<ViewBody>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let client = state.opencode().await?;
+    Ok(Json(
+        client
+            .view_session(&id, body.idle)
+            .await
+            .map_err(oc_error)?,
+    ))
 }
 
 async fn oc_permissions(

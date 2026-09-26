@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { deleteSession } from "../api";
+import { isUnread } from "../lib/read";
 import type { OcProject, OcSession } from "../types";
 import { ErrorState } from "./ErrorState";
 import { NotifyButton } from "./NotifyButton";
@@ -42,6 +43,10 @@ type Row = {
   outcome?: string;
   /** Timestamp of the last idle transition, when there is one. */
   idle?: number;
+  /** A completed turn the viewer has not seen yet. */
+  unread?: boolean;
+  /** Waiting on the user: a permission prompt or a form. */
+  pending?: "permission" | "form" | null;
 };
 
 /** The sessions of one worktree (directory) inside a repository. */
@@ -99,11 +104,22 @@ function relative(ms?: number): string {
 }
 
 function dotClass(row: Partial<Row>): string {
+  // A session waiting on the user outranks everything else: it needs an answer.
+  if (row.pending) return "bg-orange-400";
   if (row.active) return "animate-pulse bg-sky-400";
   if (row.outcome === "failed") return "bg-red-500";
   if (row.outcome === "interrupted") return "bg-amber-400";
-  if (row.idle) return "bg-emerald-500";
+  // The green dot marks an unread completed turn; once read it is gone.
+  if (row.unread) return "bg-emerald-500";
+  if (row.idle) return "";
   return "bg-amber-400";
+}
+
+/** Hover text for the status dot, where one helps. */
+function dotLabel(row: Partial<Row>): string | undefined {
+  if (row.pending === "permission") return "許可待ち";
+  if (row.pending === "form") return "回答待ち";
+  return undefined;
 }
 
 /** A session as an assistant-ui thread list entry. */
@@ -118,6 +134,8 @@ function toThread(session: OcSession): ExternalStoreThreadData<"regular"> {
       active: session.active === true,
       outcome: session.outcome,
       idle: session.time?.idle,
+      unread: isUnread(session),
+      pending: session.pending ?? null,
     } satisfies Row as unknown as Record<string, unknown>,
   };
 }
@@ -376,7 +394,10 @@ function KelpieThreadListItem() {
   return (
     <ThreadListItemPrimitive.Root className="flex items-center gap-1 rounded-xl hover:bg-accent">
       <ThreadListItemPrimitive.Trigger className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-left">
-        <span className={cn("size-2 shrink-0 rounded-full", dotClass(row))} />
+        <span
+          className={cn("size-2 shrink-0 rounded-full", dotClass(row))}
+          title={dotLabel(row)}
+        />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm">
             <ThreadListItemPrimitive.Title fallback={item.id} />
