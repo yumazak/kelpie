@@ -668,6 +668,11 @@ function ToolFallbackApproval({
     );
   }
 
+  // Nothing to decide: kelpie's runtime cannot record a tool result, so a bare
+  // Allow / Deny would only throw. A real permission arrives as an approval
+  // with options, which the branch above handles.
+  if (approval == null && interrupt == null) return null;
+
   return (
     <div
       data-slot="tool-fallback-approval"
