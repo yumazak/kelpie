@@ -19,10 +19,13 @@ function isListEvent(type: string): boolean {
   return (
     type.startsWith("session.execution.") ||
     type === "session.created" ||
-    type === "session.updated" ||
     type === "session.deleted" ||
-    type === "session.title" ||
-    type === "session.moved"
+    type === "session.forked" ||
+    type === "session.renamed" ||
+    type === "session.moved" ||
+    type === "session.metadata.updated" ||
+    type === "session.model.selected" ||
+    type === "session.agent.selected"
   );
 }
 
@@ -148,17 +151,40 @@ export function useSessions() {
         );
         return;
       }
-      // `session.updated` / `session.title` / `session.moved`: fold a known
-      // title in, otherwise ask the service (debounced).
-      if (typeof data.title === "string") {
+      if (type === "session.renamed") {
+        const title = data.title;
+        if (typeof title === "string") {
+          setSessions((previous) =>
+            previous.map((session) =>
+              session.id === id ? { ...session, title } : session,
+            ),
+          );
+        }
+        return;
+      }
+      if (type === "session.agent.selected") {
+        const agent = data.agent;
+        if (typeof agent === "string") {
+          setSessions((previous) =>
+            previous.map((session) =>
+              session.id === id ? { ...session, agent } : session,
+            ),
+          );
+        }
+        return;
+      }
+      if (type === "session.metadata.updated") {
+        const metadata = data.metadata as Record<string, unknown> | undefined;
         setSessions((previous) =>
           previous.map((session) =>
-            session.id === id ? { ...session, title: data.title as string } : session,
+            session.id === id ? { ...session, metadata } : session,
           ),
         );
-      } else {
-        scheduleRefresh();
+        return;
       }
+      // `session.moved` / `session.model.selected`: the projection changed in a
+      // way that a full refetch settles (debounced).
+      scheduleRefresh();
     });
 
     const watchdog = window.setInterval(() => void refresh(), WATCHDOG_MS);

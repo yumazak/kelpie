@@ -35,7 +35,11 @@ export function isVisible(
 ): boolean {
   if (field.hidden) return false;
   return (field.when ?? []).every((condition) => {
-    const met = matches(valueOf(condition.key, fields, values), condition.value);
+    const actual = valueOf(condition.key, fields, values);
+    // A multiselect answer "includes" the value rather than equalling it.
+    const met = Array.isArray(actual)
+      ? actual.includes(String(condition.value))
+      : matches(actual, condition.value);
     return condition.op === "eq" ? met : !met;
   });
 }
@@ -156,11 +160,27 @@ function FieldInput({
     );
   }
 
+  const inputType =
+    field.type === "number" || field.type === "integer"
+      ? "number"
+      : field.format === "email"
+        ? "email"
+        : field.format === "uri"
+          ? "url"
+          : field.format === "date"
+            ? "date"
+            : field.format === "date-time"
+              ? "datetime-local"
+              : "text";
   return (
     <input
-      type={field.type === "number" || field.type === "integer" ? "number" : "text"}
+      type={inputType}
       value={typeof value === "string" ? value : ""}
       placeholder={field.placeholder ?? field.description}
+      min={field.minimum}
+      max={field.maximum}
+      minLength={field.minLength}
+      maxLength={field.maxLength}
       onChange={(event) => onChange(event.target.value)}
       className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm outline-none focus:border-foreground/30"
     />
@@ -201,7 +221,20 @@ export function FormCard({
   onSubmit: (answer: Record<string, unknown>) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
-  const [values, setValues] = useState<Record<string, FormValue>>({});
+  // Seed the answers with the service's field defaults.
+  const [values, setValues] = useState<Record<string, FormValue>>(() => {
+    const initial: Record<string, FormValue> = {};
+    for (const field of form.fields) {
+      const fallback = field.default;
+      if (fallback === undefined) continue;
+      initial[field.key] = Array.isArray(fallback)
+        ? fallback.map(String)
+        : typeof fallback === "number"
+          ? String(fallback)
+          : fallback;
+    }
+    return initial;
+  });
 
   const submit = async () => {
     setBusy(true);

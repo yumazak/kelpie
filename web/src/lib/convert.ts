@@ -150,12 +150,15 @@ export function toThreadMessages(messages: OcMessage[]): ThreadMessageLike[] {
         content.push({ type: "reasoning", text: String(part.text ?? "") });
       } else if (part.type === "tool") {
         const state = part.state ?? {};
+        // While the input streams, `state.input` is raw text, not an object.
+        const input = state.input;
+        const streaming = typeof input === "string";
         content.push({
           type: "tool-call",
           toolCallId: part.id ?? `tool-${index}`,
           toolName: part.name ?? "tool",
-          args: state.input,
-          argsText: JSON.stringify(state.input ?? {}),
+          args: streaming ? {} : input,
+          argsText: streaming ? input : JSON.stringify(input ?? {}),
           result: toolResult(state.content),
           isError: state.status === "error",
         } as Part);
