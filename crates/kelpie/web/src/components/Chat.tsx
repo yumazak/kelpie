@@ -68,9 +68,16 @@ const THINKING: ThreadMessageLike = {
 const KELPIE_TOOLS = { question: QuestionTool };
 
 function signature(messages: ThreadMessageLike[]): string {
-  if (messages.length === 0) return "0";
-  const last = messages[messages.length - 1];
-  return `${messages.length}:${JSON.stringify(last?.content).length}`;
+  // Every message's id and content length. The old `length:lastContentLength`
+  // form was useless here: the message list is capped at 200, so `length` is
+  // nearly constant, and a change to any message but the last went unnoticed —
+  // updates were dropped and the thread showed stale turns.
+  return messages
+    .map(
+      (message) =>
+        `${message.id ?? ""}:${JSON.stringify(message.content).length}`,
+    )
+    .join("|");
 }
 
 export function Chat({
