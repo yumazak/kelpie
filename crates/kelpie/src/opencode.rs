@@ -168,14 +168,24 @@ impl OpencodeClient {
     /// asking ascending returns the OLDEST 200 and silently drops every newer
     /// turn. Fetch descending (the newest 200) and reverse, so a reload always
     /// lands on the live end of the conversation.
-    pub async fn messages(&self, session_id: &str, limit: u32) -> Result<Value, OpencodeError> {
-        let mut value = self
-            .json(
-                reqwest::Method::GET,
-                &format!("/api/session/{session_id}/message?limit={limit}&order=desc"),
-                None,
-            )
-            .await?;
+    pub async fn messages(
+        &self,
+        session_id: &str,
+        limit: u32,
+        cursor: Option<&str>,
+    ) -> Result<Value, OpencodeError> {
+        // The service rejects `cursor` together with `order`, so `order` is only
+        // sent for the first (newest) page. A cursor carries its own direction,
+        // which pages towards older messages.
+        let mut path = format!("/api/session/{session_id}/message?limit={limit}");
+        match cursor {
+            Some(cursor) => {
+                path.push_str("&cursor=");
+                path.push_str(cursor);
+            }
+            None => path.push_str("&order=desc"),
+        }
+        let mut value = self.json(reqwest::Method::GET, &path, None).await?;
         if let Some(data) = value.get_mut("data").and_then(|data| data.as_array_mut()) {
             data.reverse();
             // Each assistant message carries a git `snapshot`: the working-tree

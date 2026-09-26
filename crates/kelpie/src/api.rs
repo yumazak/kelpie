@@ -507,6 +507,8 @@ struct MessagesQuery {
     /// How many messages to return, newest first. The phone fetches a small
     /// slice while it polls and the full history when it opens a session.
     limit: Option<u32>,
+    /// opencode's page token for older messages, passed straight through.
+    cursor: Option<String>,
 }
 
 async fn oc_messages(
@@ -516,7 +518,12 @@ async fn oc_messages(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let limit = query.limit.unwrap_or(200).clamp(1, 200);
     let client = state.opencode().await?;
-    Ok(Json(client.messages(&id, limit).await.map_err(oc_error)?))
+    Ok(Json(
+        client
+            .messages(&id, limit, query.cursor.as_deref())
+            .await
+            .map_err(oc_error)?,
+    ))
 }
 
 /// One session, by id.

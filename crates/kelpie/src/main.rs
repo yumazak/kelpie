@@ -178,7 +178,7 @@ async fn cmd_sessions(limit: u32) -> Result<()> {
 
 async fn cmd_messages(session: String, limit: u32, json: bool) -> Result<()> {
     let client = OpencodeClient::discover().map_err(|error| anyhow!("{error}"))?;
-    let value = client.messages(&session, limit.min(200)).await?;
+    let value = client.messages(&session, limit.min(200), None).await?;
     if json {
         println!("{}", serde_json::to_string_pretty(&value)?);
         return Ok(());

@@ -45,13 +45,16 @@ export async function fetchSession(sessionId: string): Promise<OcSession> {
   return body.data;
 }
 
-/** One session's messages. `limit` fetches only the newest slice, which the
- *  app merges over the history it already has. */
+/** One session's messages. `limit` caps the page; `cursor` pages towards older
+ *  messages (opencode's opaque page token, passed back as `cursor.next`). */
 export function fetchMessages(
   sessionId: string,
-  limit?: number,
+  options: { limit?: number; cursor?: string } = {},
 ): Promise<OcMessagesResponse> {
-  const query = limit ? `?limit=${limit}` : "";
+  const params = new URLSearchParams();
+  if (options.limit) params.set("limit", String(options.limit));
+  if (options.cursor) params.set("cursor", options.cursor);
+  const query = params.size > 0 ? `?${params}` : "";
   return getJson<OcMessagesResponse>(
     `/api/sessions/${encodeURIComponent(sessionId)}/messages${query}`,
   );

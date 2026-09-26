@@ -35,6 +35,7 @@ import { isUnread } from "../lib/read";
 import {
   formsKey,
   formsQuery,
+  loadOlderMessages,
   messagesKey,
   messagesQuery,
   permissionsKey,
@@ -46,11 +47,6 @@ import { ErrorState } from "./ErrorState";
 import { HarnessDock } from "./HarnessDock";
 import { RuntimeProvider } from "./RuntimeProvider";
 import { SkillChips, SkillPickerButton } from "./SkillPicker";
-
-/** Fallback poll: the live event stream is primary; the stream also resyncs on
- *  (re)connect. This is only a slow watchdog for a stream that reported no
- *  error but stopped delivering. */
-const POLL_MS = 10000;
 
 /**
  * An empty assistant message marked as running. assistant-ui's `GroupedParts`
@@ -98,21 +94,11 @@ export function Chat({
   const optimisticAt = useRef<number | null>(null);
   const messagesRef = useRef<ThreadMessageLike[]>([]);
 
-  // The poll is only a fallback: the event stream is primary, and a landed
-  // step invalidates these immediately. This catches a stream that went quiet
-  // without erroring.
-  const messagesResult = useQuery({
-    ...messagesQuery(session.id),
-    refetchInterval: POLL_MS,
-  });
-  const permissionsResult = useQuery({
-    ...permissionsQuery(session.id),
-    refetchInterval: POLL_MS,
-  });
-  const formsResult = useQuery({
-    ...formsQuery(session.id),
-    refetchInterval: POLL_MS,
-  });
+  // No interval poll: the event stream drives updates, TanStack Query refetches
+  // on focus, and a reconnect resyncs through `useLiveMessage`'s open handler.
+  const messagesResult = useQuery(messagesQuery(session.id));
+  const permissionsResult = useQuery(permissionsQuery(session.id));
+  const formsResult = useQuery(formsQuery(session.id));
 
   const permissions = permissionsResult.data ?? [];
   const forms = formsResult.data ?? [];
@@ -260,6 +246,11 @@ export function Chat({
     [session.id, invalidateDock, invalidateMessages],
   );
 
+  const handleLoadOlder = useCallback(
+    () => loadOlderMessages(session.id),
+    [session.id],
+  );
+
   // The pending permissions ride along on the tool calls they gate.
   const withApprovals = useMemo(
     () => attachApprovals(messages, permissions),
@@ -348,6 +339,7 @@ export function Chat({
                     ToolByName: KELPIE_TOOLS,
                   }}
                   dock={dock}
+                  onLoadOlder={handleLoadOlder}
                   autoFocus={false}
                 />
               </QuestionContext.Provider>

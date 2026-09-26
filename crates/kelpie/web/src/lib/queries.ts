@@ -16,7 +16,7 @@ import {
   fetchSkills,
 } from "../api";
 import { queryClient } from "../query";
-import type { OcMessagesResponse } from "../types";
+import type { OcMessage, OcMessagesResponse } from "../types";
 
 export const sessionsKey = ["sessions"] as const;
 export const projectsKey = ["projects"] as const;
@@ -48,52 +48,63 @@ export const sessionQuery = (id: string) =>
     queryFn: () => fetchSession(id),
   });
 
-/** How much history to load when a session first opens, and how much to re-read
- *  on every refresh. A full list is megabytes, so refreshes pull only the
- *  newest slice and fold it over the history already in the cache. */
-const MESSAGES_FULL = 200;
+/** Page sizes. A session opens on the newest page, pulls older pages as the
+ *  reader scrolls up, and re-reads only a small newest slice on refresh. */
+const MESSAGES_PAGE = 40;
 const MESSAGES_POLL = 25;
+/** The fallback when a burst outruns the refresh slice. */
+const MESSAGES_FULL = 200;
 
 /** Fold a freshly fetched newest slice over the history already cached:
  *  refresh the messages present in both, append the new ones. */
-function mergeMessages(
-  previous: OcMessagesResponse,
-  page: OcMessagesResponse,
-): OcMessagesResponse {
-  const fresh = new Map(page.data.map((message) => [message.id, message]));
-  const updated = previous.data.map(
-    (message) => fresh.get(message.id) ?? message,
-  );
-  const seen = new Set(previous.data.map((message) => message.id));
-  const added = page.data.filter((message) => !seen.has(message.id));
-  return {
-    ...previous,
-    cursor: page.cursor ?? previous.cursor,
-    data: [...updated, ...added],
-  };
+function mergeNewest(previous: OcMessage[], page: OcMessage[]): OcMessage[] {
+  const fresh = new Map(page.map((message) => [message.id, message]));
+  const updated = previous.map((message) => fresh.get(message.id) ?? message);
+  const seen = new Set(previous.map((message) => message.id));
+  const added = page.filter((message) => !seen.has(message.id));
+  return [...updated, ...added];
 }
 
 export const messagesQuery = (id: string) =>
   queryOptions({
     queryKey: messagesKey(id),
-    queryFn: async () => {
+    queryFn: async (): Promise<OcMessagesResponse> => {
       const previous = queryClient.getQueryData<OcMessagesResponse>(
         messagesKey(id),
       );
       if (!previous || previous.data.length === 0) {
-        return fetchMessages(id, MESSAGES_FULL);
+        return fetchMessages(id, { limit: MESSAGES_PAGE });
       }
-      const page = await fetchMessages(id, MESSAGES_POLL);
+      const page = await fetchMessages(id, { limit: MESSAGES_POLL });
       const known = new Set(previous.data.map((message) => message.id));
       // If the newest slice does not reach back into the history we already
       // have, a burst added more messages than the slice covers. Taking the
       // full list then is rare and cheap enough, and avoids showing a gap.
       if (!page.data.some((message) => known.has(message.id))) {
-        return fetchMessages(id, MESSAGES_FULL);
+        return fetchMessages(id, { limit: MESSAGES_FULL });
       }
-      return mergeMessages(previous, page);
+      return { ...previous, data: mergeNewest(previous.data, page.data) };
     },
   });
+
+/** Load one page of older messages into the cache. Returns whether the page
+ *  brought anything new (so the caller can tell it reached the start). */
+export async function loadOlderMessages(id: string): Promise<boolean> {
+  const previous = queryClient.getQueryData<OcMessagesResponse>(
+    messagesKey(id),
+  );
+  const cursor = previous?.cursor?.next ?? null;
+  if (!previous || !cursor) return false;
+  const page = await fetchMessages(id, { limit: MESSAGES_PAGE, cursor });
+  const seen = new Set(previous.data.map((message) => message.id));
+  const older = page.data.filter((message) => !seen.has(message.id));
+  if (older.length === 0) return false;
+  queryClient.setQueryData<OcMessagesResponse>(messagesKey(id), {
+    data: [...older, ...previous.data],
+    cursor: page.cursor,
+  });
+  return true;
+}
 
 export const permissionsQuery = (id: string) =>
   queryOptions({

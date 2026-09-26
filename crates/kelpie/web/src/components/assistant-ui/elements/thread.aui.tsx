@@ -61,10 +61,13 @@ import {
 import {
   createContext,
   useContext,
+  useRef,
+  useState,
   type ComponentType,
   type FC,
   type PropsWithChildren,
   type ReactNode,
+  type UIEvent,
 } from "react";
 
 export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart;
@@ -147,6 +150,11 @@ export type ThreadProps = {
    * InteractionDock here so a blocked agent's question sits over the input.
    */
   dock?: ReactNode;
+  /**
+   * Called when the reader scrolls to the top, to pull an older page of the
+   * conversation. Resolves `true` while more history remains.
+   */
+  onLoadOlder?: (() => Promise<boolean>) | undefined;
 };
 
 const EMPTY_COMPONENTS: ThreadComponents = {};
@@ -192,12 +200,18 @@ export const Thread: FC<ThreadProps> = ({
   components = EMPTY_COMPONENTS,
   autoFocus = true,
   dock,
+  onLoadOlder,
 }) => {
   const isEmpty = useAuiState(isNewChatView);
 
   return (
     <ThreadComponentsContext.Provider value={components}>
-      <ThreadRoot isEmpty={isEmpty} autoFocus={autoFocus} dock={dock} />
+      <ThreadRoot
+        isEmpty={isEmpty}
+        autoFocus={autoFocus}
+        dock={dock}
+        onLoadOlder={onLoadOlder}
+      />
     </ThreadComponentsContext.Provider>
   );
 };
@@ -206,8 +220,29 @@ const ThreadRoot: FC<{
   isEmpty: boolean;
   autoFocus: boolean;
   dock?: ReactNode;
-}> = ({ isEmpty, autoFocus, dock }) => {
+  onLoadOlder?: () => Promise<boolean>;
+}> = ({ isEmpty, autoFocus, dock, onLoadOlder }) => {
   const { Welcome = ThreadWelcome } = useContext(ThreadComponentsContext);
+  const loadingOlder = useRef(false);
+  const noMoreOlder = useRef(false);
+  const [olderPending, setOlderPending] = useState(false);
+
+  // Scrolling to the top pulls the previous page. The browser anchors scroll
+  // to the content already on screen, so prepending does not move the reader.
+  const handleScroll = (event: UIEvent<HTMLDivElement>) => {
+    if (!onLoadOlder || loadingOlder.current || noMoreOlder.current) return;
+    if (event.currentTarget.scrollTop > 80) return;
+    loadingOlder.current = true;
+    setOlderPending(true);
+    void onLoadOlder()
+      .then((more) => {
+        if (!more) noMoreOlder.current = true;
+      })
+      .finally(() => {
+        loadingOlder.current = false;
+        setOlderPending(false);
+      });
+  };
 
   return (
     <ThreadPrimitive.Root
@@ -223,6 +258,7 @@ const ThreadRoot: FC<{
       <ThreadPrimitive.Viewport
         turnAnchor="top"
         data-slot="aui_thread-viewport"
+        onScroll={handleScroll}
         className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll overscroll-y-contain scroll-smooth"
       >
         <div
@@ -231,6 +267,14 @@ const ThreadRoot: FC<{
             isEmpty && "justify-center",
           )}
         >
+          {olderPending && (
+            <div
+              role="status"
+              className="py-3 text-center text-xs text-muted-foreground"
+            >
+              過去を読み込んでいます…
+            </div>
+          )}
           <AuiIf condition={isNewChatView}>
             <Welcome />
           </AuiIf>
