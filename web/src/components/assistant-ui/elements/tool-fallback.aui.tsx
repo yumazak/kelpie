@@ -725,12 +725,15 @@ const ToolFallbackImpl: ToolCallMessagePartComponent = ({
   const shouldRenderApproval =
     isRequiresAction && offersInterruptAction(status, approval, interrupt);
 
-  const [open, setOpen] = useState(isRequiresAction);
-  const [prevRequiresAction, setPrevRequiresAction] =
-    useState(isRequiresAction);
-  if (isRequiresAction !== prevRequiresAction) {
-    setPrevRequiresAction(isRequiresAction);
-    if (isRequiresAction) setOpen(true);
+  // Open for something real to answer — a permission approval or a human
+  // interrupt. A tool call that merely lost its result (an interrupted run) has
+  // nothing to act on, so it stays collapsed instead of dumping its arguments.
+  const needsAttention = approval != null || interrupt != null;
+  const [open, setOpen] = useState(needsAttention);
+  const [prevNeedsAttention, setPrevNeedsAttention] = useState(needsAttention);
+  if (needsAttention !== prevNeedsAttention) {
+    setPrevNeedsAttention(needsAttention);
+    if (needsAttention) setOpen(true);
   }
 
   return (
