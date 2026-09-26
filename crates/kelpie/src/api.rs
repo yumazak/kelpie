@@ -4,6 +4,7 @@
 //! proxy it. Everything here is a thin, authenticated pass-through to the
 //! opencode service, plus the event relay and Web Push.
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -16,7 +17,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{Value, json};
 use tokio::sync::{Mutex, broadcast};
 use tokio_stream::{StreamExt, wrappers::BroadcastStream};
 
@@ -94,6 +95,7 @@ impl AppState {
 pub fn router(state: AppState, static_dir: Option<PathBuf>) -> Router {
     let app = Router::new()
         .route("/api/sessions", get(oc_sessions))
+        .route("/api/projects", get(oc_projects))
         .route("/api/skills", get(oc_skills))
         .route("/api/events", get(oc_events))
         .route("/api/sessions/{id}/messages", get(oc_messages))
@@ -157,10 +159,11 @@ pub async fn serve(
 /// Follow the opencode event stream, fan it out to browser subscribers, and
 /// push the events that deserve a notification. It reconnects forever.
 async fn event_bridge(state: AppState) {
-    // session id → project basename, so an execution event (which carries no
-    // `location`) costs one lookup, not one per turn.
-    let mut project_cache: std::collections::HashMap<String, String> =
-        std::collections::HashMap::new();
+    // Repository names, resolved once per session and per project. An execution
+    // event carries no `location` at all, and the events that do carry only a
+    // directory — a worktree's branch, not a repository — so every name comes
+    // from the session's project.
+    let mut names = RepositoryNames::default();
     loop {
         let client = match state.opencode().await {
             Ok(client) => client,
@@ -185,7 +188,7 @@ async fn event_bridge(state: AppState) {
             buffer.push_str(&String::from_utf8_lossy(&bytes));
             for value in drain_sse(&mut buffer) {
                 if let Some(notification) =
-                    notification_for_event(&value, &client, &mut project_cache).await
+                    notification_for_event(&value, &client, &mut names).await
                 {
                     let store = state.push();
                     tokio::spawn(async move {
@@ -270,6 +273,73 @@ async fn oc_sessions(
         "sessions": sessions,
         "cursor": value.get("cursor").cloned().unwrap_or(serde_json::Value::Null),
     })))
+}
+
+/// Every project, each named by its repository. opencode groups the worktrees
+/// of one repository under a single project, so the session list can group by
+/// repository instead of by directory. The repository name is the basename of
+/// the project's main checkout — the worktree opencode lists without a
+/// `strategy`; a worktree's own basename is its branch, not a repository name.
+async fn oc_projects(State(state): State<AppState>) -> Result<Json<Value>, ApiError> {
+    let client = state.opencode().await?;
+    let value = client.projects().await.map_err(oc_error)?;
+    let projects = value.as_array().cloned().unwrap_or_default();
+
+    // Resolving a name costs one worktree call per project; run them together.
+    // A failed lookup is not fatal: the canonical directory still names it.
+    let mut tasks = Vec::with_capacity(projects.len());
+    for project in &projects {
+        let client = client.clone();
+        let id = project
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        let canonical = project
+            .get("canonical")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        tasks.push(tokio::spawn(async move {
+            let base = client
+                .worktrees(&id)
+                .await
+                .ok()
+                .and_then(|value| main_checkout(&value));
+            (id, canonical, base)
+        }));
+    }
+
+    let mut out = Vec::with_capacity(projects.len());
+    for task in tasks {
+        let (id, canonical, base) = task.await.unwrap_or_default();
+        let name = base
+            .as_deref()
+            .and_then(basename)
+            .or_else(|| basename(&canonical))
+            .unwrap_or_else(|| canonical.clone());
+        out.push(json!({
+            "id": id,
+            "name": name,
+            "base": base,
+            "canonical": canonical,
+        }));
+    }
+
+    Ok(Json(json!({ "projects": out })))
+}
+
+/// The main checkout in a `/api/worktree` list: the entry without a `strategy`.
+fn main_checkout(value: &Value) -> Option<String> {
+    value.as_array()?.iter().find_map(|entry| {
+        if entry.get("strategy").is_some() {
+            return None;
+        }
+        entry
+            .get("directory")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+    })
 }
 
 /// The directory a session runs in. Skills are scoped to it, so the client
@@ -493,7 +563,7 @@ async fn push_test(State(state): State<AppState>) -> Json<serde_json::Value> {
 async fn notification_for_event(
     value: &serde_json::Value,
     client: &OpencodeClient,
-    cache: &mut std::collections::HashMap<String, String>,
+    names: &mut RepositoryNames,
 ) -> Option<Notification> {
     let kind = value.get("type")?.as_str()?;
     let data = value.get("data")?;
@@ -502,25 +572,9 @@ async fn notification_for_event(
         .and_then(|value| value.as_str())
         .map(str::to_string);
 
-    // The event carries the project directory when it has one. The execution
-    // events do not, so fall back to the session (cached).
-    let project = match project_from_event(value) {
-        Some(project) => project,
-        None => match &session_id {
-            Some(id) => match cache.get(id) {
-                Some(project) => project.clone(),
-                None => {
-                    let project = client
-                        .session_directory(id)
-                        .await
-                        .and_then(|directory| basename(&directory))
-                        .unwrap_or_else(|| "opencode".to_string());
-                    cache.insert(id.clone(), project.clone());
-                    project
-                }
-            },
-            None => "opencode".to_string(),
-        },
+    let project = match &session_id {
+        Some(id) => names.for_session(client, id).await,
+        None => FALLBACK_PROJECT.to_string(),
     };
 
     match kind {
@@ -579,13 +633,73 @@ async fn notification_for_event(
     }
 }
 
-/// The project basename an event's own `location` names, when it has one.
-fn project_from_event(value: &serde_json::Value) -> Option<String> {
-    value
-        .get("location")
-        .and_then(|location| location.get("directory"))
-        .and_then(|value| value.as_str())
-        .and_then(basename)
+/// The project name a notification falls back to when nothing else resolves.
+const FALLBACK_PROJECT: &str = "opencode";
+
+/// The repository a session belongs to, for notifications. opencode groups the
+/// worktrees of one repository under a single `projectID`, and the repository is
+/// named by its main checkout — the worktree listed without a `strategy`. Both
+/// answers are cached: a session is named once, and every session in a project
+/// after the first reuses the project's name.
+#[derive(Default)]
+struct RepositoryNames {
+    /// session id → repository name.
+    sessions: HashMap<String, String>,
+    /// project id → repository name.
+    projects: HashMap<String, String>,
+}
+
+impl RepositoryNames {
+    /// The repository name for a session, resolved lazily and cached.
+    async fn for_session(&mut self, client: &OpencodeClient, session_id: &str) -> String {
+        if let Some(name) = self.sessions.get(session_id) {
+            return name.clone();
+        }
+        let name = self.resolve_session(client, session_id).await;
+        self.sessions.insert(session_id.to_string(), name.clone());
+        name
+    }
+
+    /// One session's project, then that project's repository name. The session's
+    /// own directory is used only if the project is somehow unnameable.
+    async fn resolve_session(&mut self, client: &OpencodeClient, session_id: &str) -> String {
+        let Ok(value) = client.session(session_id).await else {
+            return FALLBACK_PROJECT.to_string();
+        };
+        let data = value.get("data").unwrap_or(&value);
+        let directory = data
+            .get("location")
+            .and_then(|location| location.get("directory"))
+            .and_then(Value::as_str);
+        match data.get("projectID").and_then(Value::as_str) {
+            Some(project_id) => self.resolve_project(client, project_id, directory).await,
+            None => directory
+                .and_then(basename)
+                .unwrap_or_else(|| FALLBACK_PROJECT.to_string()),
+        }
+    }
+
+    /// The repository name for a project, resolved lazily and cached.
+    async fn resolve_project(
+        &mut self,
+        client: &OpencodeClient,
+        project_id: &str,
+        directory: Option<&str>,
+    ) -> String {
+        if let Some(name) = self.projects.get(project_id) {
+            return name.clone();
+        }
+        let name = client
+            .worktrees(project_id)
+            .await
+            .ok()
+            .and_then(|value| main_checkout(&value))
+            .and_then(|base| basename(&base))
+            .or_else(|| directory.and_then(basename))
+            .unwrap_or_else(|| FALLBACK_PROJECT.to_string());
+        self.projects.insert(project_id.to_string(), name.clone());
+        name
+    }
 }
 
 /// The last path segment, ignoring a trailing slash.
@@ -621,5 +735,30 @@ impl IntoResponse for ApiError {
             Json(json!({ "code": self.code, "message": self.message })),
         )
             .into_response()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The main checkout is the entry without a `strategy`. Worktrees carry
+    /// `"strategy": "git"` and must not be mistaken for it, however they are
+    /// ordered in the list.
+    #[test]
+    fn main_checkout_skips_worktrees() {
+        let list = json!([
+            { "directory": "/repo/.herdr/wt/a", "strategy": "git" },
+            { "directory": "/repo" },
+            { "directory": "/repo/.herdr/wt/b", "strategy": "git" },
+        ]);
+        assert_eq!(main_checkout(&list).as_deref(), Some("/repo"));
+    }
+
+    /// A project that only ever saw worktrees has no main checkout to name.
+    #[test]
+    fn main_checkout_is_none_without_a_base() {
+        let list = json!([{ "directory": "/repo/wt", "strategy": "git" }]);
+        assert_eq!(main_checkout(&list), None);
     }
 }

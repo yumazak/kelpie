@@ -48,6 +48,16 @@ export interface OcSession {
   active?: boolean;
 }
 
+/** One project (repository), as kelpie's `/api/projects` names it. */
+export interface OcProject {
+  id: string;
+  /** The repository name: the main checkout's basename. */
+  name?: string;
+  /** The main checkout's directory, when opencode lists one. */
+  base?: string | null;
+  canonical?: string;
+}
+
 /** The service's opaque page token; `next` fetches older sessions. */
 export interface OcCursor {
   previous?: string | null;

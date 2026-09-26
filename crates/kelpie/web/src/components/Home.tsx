@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { deleteSession } from "../api";
-import type { OcSession } from "../types";
+import type { OcProject, OcSession } from "../types";
 import { ErrorState } from "./ErrorState";
 import { NotifyButton } from "./NotifyButton";
 import { Dots } from "./loading-ui/dots";
@@ -36,13 +36,27 @@ import { Skeleton } from "./ui/skeleton";
 
 /** The display data a row needs, carried on each thread's `custom`. */
 type Row = {
-  directory: string;
   agent?: string;
   updated?: number;
   active?: boolean;
   outcome?: string;
   /** Timestamp of the last idle transition, when there is one. */
   idle?: number;
+};
+
+/** The sessions of one worktree (directory) inside a repository. */
+type DirectoryGroup = {
+  directory: string;
+  label: string;
+  sessions: OcSession[];
+};
+
+/** A repository. opencode groups the worktrees of one repository under a single
+ *  `projectID`, so all of its checkouts land in one repo group. */
+type RepoGroup = {
+  key: string;
+  name: string;
+  directories: DirectoryGroup[];
 };
 
 /** Opens the row menu for the session with this id. */
@@ -52,6 +66,27 @@ function basename(path?: string): string {
   if (!path) return "(unknown)";
   const parts = path.replace(/\/+$/, "").split("/");
   return parts[parts.length - 1] || path;
+}
+
+/** The newest update in a set of sessions, for ordering groups by recency. */
+function latest(sessions: OcSession[]): number {
+  return Math.max(...sessions.map((session) => session.time?.updated ?? 0));
+}
+
+/** The label for a worktree inside its repository. The main checkout reads
+ *  "main"; every other directory is a worktree, named by its branch (the last
+ *  path segment). Until `/api/projects` lands we only know the path, so a
+ *  directory whose basename matches the repo is treated as the main checkout. */
+function directoryLabel(
+  directory: string,
+  project: OcProject | undefined,
+  repoName: string,
+): string {
+  if (project?.base) {
+    return directory === project.base ? "main" : basename(directory);
+  }
+  const label = basename(directory);
+  return label === repoName ? "main" : label;
 }
 
 function relative(ms?: number): string {
@@ -78,7 +113,6 @@ function toThread(session: OcSession): ExternalStoreThreadData<"regular"> {
     id: session.id,
     title: session.title || session.id,
     custom: {
-      directory: session.location?.directory ?? "",
       agent: session.agent,
       updated: session.time?.updated,
       active: session.active === true,
@@ -88,10 +122,11 @@ function toThread(session: OcSession): ExternalStoreThreadData<"regular"> {
   };
 }
 
-/** Every session, grouped by the directory it ran in. Older pages stream in as
- *  the list is scrolled. */
+/** Every session, grouped by repository and then by the directory (worktree)
+ *  it ran in. Older pages stream in as the list is scrolled. */
 export function Home({
   sessions,
+  projects,
   error,
   loading,
   hasMore,
@@ -100,6 +135,9 @@ export function Home({
   onRefresh,
 }: {
   sessions: OcSession[];
+  /** Repository names, keyed by `projectID`. Empty until `/api/projects` lands,
+   *  in which case grouping falls back to the bare directory. */
+  projects: OcProject[];
   error: string | null;
   loading: boolean;
   hasMore: boolean;
@@ -134,18 +172,39 @@ export function Home({
     return <HomeSkeleton />;
   }
 
-  const groups = new Map<string, OcSession[]>();
+  // Group by repository first (all of a repository's worktrees share one
+  // `projectID`), then by the directory each session ran in.
+  const projectById = new Map(projects.map((project) => [project.id, project]));
+  const byProject = new Map<string, Map<string, OcSession[]>>();
   for (const session of sessions) {
-    const key = session.location?.directory ?? "(unknown)";
-    const list = groups.get(key) ?? [];
+    const directory = session.location?.directory ?? "";
+    const key = session.projectID ?? `directory:${directory || "(unknown)"}`;
+    const directories = byProject.get(key) ?? new Map<string, OcSession[]>();
+    const list = directories.get(directory) ?? [];
     list.push(session);
-    groups.set(key, list);
+    directories.set(directory, list);
+    byProject.set(key, directories);
   }
-  const ordered = [...groups.entries()].sort((a, b) => {
-    const latest = (items: OcSession[]) =>
-      Math.max(...items.map((session) => session.time?.updated ?? 0));
-    return latest(b[1]) - latest(a[1]);
-  });
+
+  const ordered: RepoGroup[] = [...byProject.entries()]
+    .map(([key, directories]) => {
+      const project = projectById.get(key);
+      const name =
+        project?.name || basename(project?.canonical || [...directories.keys()][0]);
+      const groups = [...directories.entries()]
+        .map(([directory, list]) => ({
+          directory,
+          label: directoryLabel(directory, project, name),
+          sessions: list,
+        }))
+        .sort((a, b) => latest(b.sessions) - latest(a.sessions));
+      return { key, name, directories: groups };
+    })
+    .sort(
+      (a, b) =>
+        Math.max(...b.directories.map((group) => latest(group.sessions))) -
+        Math.max(...a.directories.map((group) => latest(group.sessions))),
+    );
 
   // assistant-ui builds its thread-list runtime once, at mount, from the
   // threads it is handed, and only syncs a new set afterwards (in an effect).
@@ -153,7 +212,8 @@ export function Home({
   // throw. Remount whenever the displayed set changes, so the runtime always
   // matches what is on screen.
   const listKey = ordered
-    .flatMap(([, items]) => items.map((session) => session.id))
+    .flatMap((repo) => repo.directories)
+    .flatMap((group) => group.sessions.map((session) => session.id))
     .join("|");
 
   const confirmDelete = async () => {
@@ -232,26 +292,28 @@ export function Home({
 }
 
 /**
- * assistant-ui's thread list, grouped by directory. The runtime carries only
- * the list — the messages live in the chat's own runtime — so switching a
- * thread just navigates.
+ * assistant-ui's thread list, grouped by repository and then directory. The
+ * runtime carries only the list — the messages live in the chat's own runtime —
+ * so switching a thread just navigates.
  */
 function HomeThreadList({
   groups,
   onSelect,
 }: {
-  groups: Array<[string, OcSession[]]>;
+  groups: RepoGroup[];
   onSelect: (session: OcSession) => void;
 }) {
   const { threads, indexOf, byId } = useMemo(() => {
     const threads: ExternalStoreThreadData<"regular">[] = [];
     const indexOf = new Map<string, number>();
     const byId = new Map<string, OcSession>();
-    for (const [, sessions] of groups) {
-      for (const session of sessions) {
-        indexOf.set(session.id, threads.length);
-        byId.set(session.id, session);
-        threads.push(toThread(session));
+    for (const repo of groups) {
+      for (const group of repo.directories) {
+        for (const session of group.sessions) {
+          indexOf.set(session.id, threads.length);
+          byId.set(session.id, session);
+          threads.push(toThread(session));
+        }
       }
     }
     return { threads, indexOf, byId };
@@ -275,18 +337,27 @@ function HomeThreadList({
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <ThreadListPrimitive.Root className="flex flex-col">
-        {groups.map(([directory, sessions]) => (
-          <section key={directory} className="mb-6">
-            <h2 className="mb-2 truncate text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              {basename(directory)}
+        {groups.map((repo) => (
+          <section key={repo.key} className="mb-6">
+            <h2 className="mb-2 truncate px-1 text-sm font-semibold">
+              {repo.name}
             </h2>
-            <div className="flex flex-col gap-1">
-              {sessions.map((session) => (
-                <ThreadListPrimitive.ItemByIndex
-                  key={session.id}
-                  index={indexOf.get(session.id) ?? 0}
-                  components={{ ThreadListItem: KelpieThreadListItem }}
-                />
+            <div className="flex flex-col gap-3">
+              {repo.directories.map((group) => (
+                <div key={group.directory || "(unknown)"}>
+                  <h3 className="mb-1 truncate px-3 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                    {group.label}
+                  </h3>
+                  <div className="flex flex-col gap-1">
+                    {group.sessions.map((session) => (
+                      <ThreadListPrimitive.ItemByIndex
+                        key={session.id}
+                        index={indexOf.get(session.id) ?? 0}
+                        components={{ ThreadListItem: KelpieThreadListItem }}
+                      />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </section>
