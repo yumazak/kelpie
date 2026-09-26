@@ -153,7 +153,7 @@ function FieldInput({
             value={isCustom ? selected : ""}
             placeholder="その他（自由入力）"
             onChange={(event) => onChange(event.target.value)}
-            className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm outline-none focus:border-foreground/30"
+            className="w-full rounded-lg border border-border bg-background px-2 py-1 text-base outline-none focus:border-foreground/30 md:text-sm"
           />
         )}
       </div>
@@ -182,7 +182,7 @@ function FieldInput({
       minLength={field.minLength}
       maxLength={field.maxLength}
       onChange={(event) => onChange(event.target.value)}
-      className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm outline-none focus:border-foreground/30"
+      className="w-full rounded-lg border border-border bg-background px-2 py-1 text-base outline-none focus:border-foreground/30 md:text-sm"
     />
   );
 }
