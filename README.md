@@ -5,7 +5,8 @@
 Drive an [opencode](https://opencode.ai) server from your phone as a chat app, over Tailscale.
 Named after the Australian Kelpie (a dog).
 
-- **Every project in one list**, a ChatGPT-style mobile GUI, token-by-token streaming
+- **Every project in one list** with read/unread and waiting confirmations at a glance, a
+  ChatGPT-style mobile GUI, token-by-token streaming
 - **Answer permissions and questions from your phone**, plus **Web Push notifications**
   (permission prompts, questions, finished turns)
 - Uses opencode v2's **HTTP API and nothing else** — no screen scraping, no log parsing,

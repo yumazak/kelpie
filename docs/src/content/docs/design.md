@@ -14,7 +14,7 @@ description: How kelpie is designed around opencode v2, and why.
 | Implementation | **Rust (bridge / CLI) + TypeScript (`crates/kelpie/web`)** |
 | Integration surface | opencode v2's **HTTP API + SSE** (no screen scraping, no log parsing, no keystrokes) |
 | UI | ChatGPT-style mobile GUI (assistant-ui). Dark, always |
-| Session list | **Across every project** (`GET /api/session`) |
+| Session list | **Across every project** (`GET /api/session`). Read/unread comes from opencode's `time.idle` / `time.viewed` |
 | Dialogs | Answer permissions and forms structurally, through the API |
 | Notifications | Web Push (VAPID). `permission.asked` / `form.created` / `session.execution.*` |
 | License | Open source (MIT) |
@@ -34,6 +34,8 @@ already there:
 | Repository (worktrees) / main checkout | `GET /api/project` / `GET /api/worktree` |
 | Permissions | `GET /api/session/{id}/permission` / `POST .../reply` |
 | Questions (forms) | `GET /api/session/{id}/form` / `POST .../reply` |
+| Read state | `POST /api/session/{id}/view` (records the `time.idle` the client displayed) |
+| Pending confirmations | `GET /api/permission/request` / `GET /api/form` (per location, matched by `sessionID`) |
 
 TUI-only harnesses (claude / codex / pi) can only read the screen and send keystrokes,
 which gets you neither streaming nor structured dialogs. opencode makes that
@@ -91,6 +93,15 @@ The events that matter:
   (worktree)** it ran in. The worktrees of one repository share an opencode
   `projectID`, and the repository is named by the basename of its main checkout (the
   directory `GET /api/worktree` lists without a `strategy`). Status dot, relative time.
+- **Read / unread / waiting**: the dot on the left carries the state. Unread
+  (`time.idle` > `time.viewed`) is green; read has no dot. A session stopped on a
+  permission or a question is orange; a running one is blue (pulsing). Opening the chat
+  posts the `idle` it displayed to `POST /api/session/{id}/view`, and re-posts whenever
+  a turn finishes while the chat is open. opencode shares `viewed`, so reading in the
+  TUI clears the marker here too.
+- **Finding the waiters**: permissions and forms are location-scoped in opencode (the
+  directory a session runs in), so building the list asks `GET /api/permission/request`
+  and `GET /api/form` once per directory on the page and matches them by `sessionID`.
 - **Chat**: assistant-ui's styled `Thread`. Conversations render opencode's messages as
   they are (`user` → bubble, assistant `text` → markdown, `reasoning` → collapsible,
   `tool` → card).

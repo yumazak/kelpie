@@ -14,7 +14,7 @@ description: opencode v2 を一クライアントとして使うときの設計�
 | 実装 | **Rust（bridge / CLI）+ TypeScript（`crates/kelpie/web`）** |
 | 統合面 | opencode v2 の **HTTP API + SSE**（画面スクレイプ・ログ解析・キー送信なし） |
 | UI | ChatGPT 風モバイル GUI（assistant-ui）。ダーク固定 |
-| 一覧 | **全プロジェクト横断**（`GET /api/session`） |
+| 一覧 | **全プロジェクト横断**（`GET /api/session`）。未読は opencode の `time.idle` / `time.viewed` で判定 |
 | ダイアログ | permission / form を API で構造的に回答 |
 | 通知 | Web Push（VAPID）。`permission.asked` / `form.created` / `session.execution.*` |
 | 公開 | OSS（MIT） |
@@ -33,6 +33,8 @@ opencode v2 は **サーバ + クライアント**の構造で、TUI も web も
 | リポジトリ（worktree 統合）/ 本体チェックアウト | `GET /api/project` / `GET /api/worktree` |
 | 権限 | `GET /api/session/{id}/permission` / `POST .../reply` |
 | 質問（form） | `GET /api/session/{id}/form` / `POST .../reply` |
+| 既読 | `POST /api/session/{id}/view`（表示した `time.idle` を記録） |
+| 確認待ち | `GET /api/permission/request` / `GET /api/form`（location 単位、`sessionID` で突き合わせ） |
 
 TUI 専用のハーネス（claude / codex / pi）は、画面を読んでキーを送るしかなく、
 ストリーミングも構造化ダイアログも得られない。opencode はそれが要らないので、
@@ -87,6 +89,14 @@ TUI 専用のハーネス（claude / codex / pi）は、画面を読んでキー
   同じリポジトリの worktree は opencode の `projectID` でひとつにまとまり、
   本体チェックアウト（`GET /api/worktree` で `strategy` が付かないディレクトリ）の
   basename をリポジトリ名にする。状態ドット、相対時刻。
+- **既読 / 未読 / 確認待ち**: 左のドットで状態を示す。未読（`time.idle` > `time.viewed`）は
+  緑、既読はドットなし。許可・質問で止まっているセッションはオレンジ、実行中は水色（点滅）。
+  チャットを開くと `POST /api/session/{id}/view` に表示中の `idle` を送り、表示中にターンが
+  完了したらその都度送り直す。`viewed` は opencode が共有するので、TUI で読めば kelpie 側の
+  未読も消える。
+- **確認待ちの検出**: 権限とフォームは opencode では location（セッションの作業ディレクトリ）
+  単位なので、一覧を返すときにページ内の各ディレクトリについて
+  `GET /api/permission/request` / `GET /api/form` を一度ずつ引き、`sessionID` で突き合わせる。
 - **Chat**: assistant-ui の styled `Thread`。会話は opencode のメッセージをそのまま描画
   （`user` → バブル、`assistant` の `text` → markdown、`reasoning` → 折りたたみ、`tool` → カード）。
 - **ストリーミング**: `session.text.delta` を積んで進行中の発言を描画。`step.ended` で

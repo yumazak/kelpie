@@ -109,6 +109,15 @@ export function interruptSession(sessionId: string): Promise<void> {
   );
 }
 
+/** Mark a session's latest completed turn as read. `idle` is the session's
+ *  `time.idle` the client displayed; opencode records it as `time.viewed`,
+ *  which every client shares. */
+export function viewSession(sessionId: string, idle: number): Promise<void> {
+  return postJson(`/api/sessions/${encodeURIComponent(sessionId)}/view`, {
+    idle,
+  });
+}
+
 /** Delete a session and its child sessions. Destructive. */
 export async function deleteSession(sessionId: string): Promise<void> {
   const response = await fetch(

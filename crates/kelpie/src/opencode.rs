@@ -149,6 +149,19 @@ impl OpencodeClient {
         .await
     }
 
+    /// Mark the idle transition a viewer has observed as viewed. `idle` is the
+    /// session's `time.idle` at the moment the client displayed it; the service
+    /// records it as `time.viewed`, which is what makes a session "read" for
+    /// every client. Responds with no content.
+    pub async fn view_session(&self, session_id: &str, idle: f64) -> Result<Value, OpencodeError> {
+        self.json(
+            reqwest::Method::POST,
+            &format!("/api/session/{session_id}/view"),
+            Some(serde_json::json!({ "idle": idle })),
+        )
+        .await
+    }
+
     /// One session's messages, oldest first.
     ///
     /// The service caps `limit` at 200 and pages from the END of the log, so
@@ -222,6 +235,24 @@ impl OpencodeClient {
         if let Some(directory) = directory {
             request = request.query(&[("location[directory]", directory)]);
         }
+        self.send_json(request).await
+    }
+
+    /// Pending permission requests for a location (the directory a session runs
+    /// in). opencode scopes these by location, not globally, so a directory the
+    /// service no longer knows is an error the caller ignores.
+    pub async fn pending_permissions(&self, directory: &str) -> Result<Value, OpencodeError> {
+        let request = self
+            .request(reqwest::Method::GET, "/api/permission/request")
+            .query(&[("location[directory]", directory)]);
+        self.send_json(request).await
+    }
+
+    /// Pending forms (opencode's ask-the-user mechanism) for a location.
+    pub async fn pending_forms(&self, directory: &str) -> Result<Value, OpencodeError> {
+        let request = self
+            .request(reqwest::Method::GET, "/api/form")
+            .query(&[("location[directory]", directory)]);
         self.send_json(request).await
     }
 

@@ -27,7 +27,11 @@ function isListEvent(type: string): boolean {
     type === "session.moved" ||
     type === "session.metadata.updated" ||
     type === "session.model.selected" ||
-    type === "session.agent.selected"
+    type === "session.agent.selected" ||
+    // A pending permission or form is shown on the row; refresh when one is
+    // raised or cleared.
+    type.startsWith("permission.") ||
+    type.startsWith("form.")
   );
 }
 
