@@ -1,8 +1,8 @@
 # The toolchain mise provides for this repo. Node is pinned to the version the
 # release workflow uses (26); pnpm to the version CI installs (12).
 #
-# `knip` is deliberately absent: it is a devDependency of web/, so its version
-# is locked in pnpm-lock.yaml and CI can run it without mise.
+# `knip` is deliberately absent: it is a devDependency of crates/kelpie/web/,
+# so its version is locked in pnpm-lock.yaml and CI can run it without mise.
 
 [tools]
 rust = "1.98"

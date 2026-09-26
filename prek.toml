@@ -1,7 +1,8 @@
 # Checks that run before each commit, via `prek` (installed by mise).
 #
-# The toolchain is pinned in mise.toml; `knip` is a devDependency of web/, so
-# `pnpm --dir web` resolves it from the lockfile.
+# The toolchain is pinned in mise.toml; `knip` is a devDependency of
+# crates/kelpie/web/, so `pnpm --dir crates/kelpie/web` resolves it from the
+# lockfile.
 #
 # Whole-project checks set `pass_filenames = false` and are scoped with
 # `files`, so a Rust-only commit does not pay for the web checks and a web-only
@@ -13,33 +14,33 @@ repo = "local"
 [[repos.hooks]]
 id = "knip"
 name = "knip (unused files, exports, deps)"
-entry = "pnpm --dir web run knip"
+entry = "pnpm --dir crates/kelpie/web run knip"
 language = "system"
-files = "^web/"
+files = "^crates/kelpie/web/"
 pass_filenames = false
 
 [[repos.hooks]]
 id = "oxlint"
 name = "oxlint"
-entry = "pnpm --dir web run lint"
+entry = "pnpm --dir crates/kelpie/web run lint"
 language = "system"
-files = "^web/"
+files = "^crates/kelpie/web/"
 pass_filenames = false
 
 [[repos.hooks]]
 id = "typecheck"
 name = "tsc --build"
-entry = "pnpm --dir web run typecheck"
+entry = "pnpm --dir crates/kelpie/web run typecheck"
 language = "system"
-files = "^web/"
+files = "^crates/kelpie/web/"
 pass_filenames = false
 
 [[repos.hooks]]
 id = "routes"
 name = "routeTree.gen.ts is current"
-entry = "bash web/scripts/check-routes.sh"
+entry = "bash crates/kelpie/web/scripts/check-routes.sh"
 language = "system"
-files = "^web/src/routes/|^web/src/routeTree\\.gen\\.ts$"
+files = "^crates/kelpie/web/src/routes/|^crates/kelpie/web/src/routeTree\\.gen\\.ts$"
 pass_filenames = false
 
 [[repos.hooks]]
