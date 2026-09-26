@@ -17,6 +17,7 @@ import {
   type ThreadMessageLike,
 } from "@assistant-ui/react";
 
+import { KelpieMark } from "@/components/KelpieMark";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -252,11 +253,8 @@ export function Home({
   return (
     <div className="mx-auto h-full max-w-2xl overflow-y-auto px-4 py-5">
       <header className="mb-4 flex items-center justify-between">
-        <div className="text-lg font-semibold">kelpie</div>
-        <div className="flex items-center gap-3">
-          <div className="text-xs text-muted-foreground">opencode</div>
-          <NotifyButton />
-        </div>
+        <KelpieMark className="h-9 w-9" />
+        <NotifyButton />
       </header>
 
       {sessions.length === 0 ? (

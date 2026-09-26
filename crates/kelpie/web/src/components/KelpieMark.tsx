@@ -1,7 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="kelpie">
-  <rect width="1024" height="1024" fill="#17171c"/>
-  <g transform="translate(0,1024) scale(0.1,-0.1)" fill="#f2f2f0" stroke="none">
-    <path d="M4905 9007 c-42 -44 -156 -212 -246 -362 -27 -44 -82 -132 -123 -195
+/**
+ * The kelpie mark, on its tile — the logo.
+ *
+ * The path is the one in `public/favicon.svg`, inlined rather than loaded as an
+ * image so the header can size it with a class. The two colours are the icon's
+ * own and are fixed, not themed: the sequential mark is a brand asset (and the
+ * app is dark-only), so it is the same picture here as on the home screen.
+ *
+ * Whitespace and line breaks inside a `d` attribute are insignificant, so the
+ * data is kept wrapped the way it was traced.
+ */
+const DOG = `M4905 9007 c-42 -44 -156 -212 -246 -362 -27 -44 -82 -132 -123 -195
 -99 -155 -208 -323 -280 -434 -77 -119 -166 -276 -227 -401 -26 -55 -71 -140
 -99 -189 -60 -106 -122 -243 -143 -318 -22 -75 -47 -253 -47 -332 0 -37 5
 -110 12 -162 l11 -94 -40 -48 c-45 -53 -132 -174 -238 -332 -187 -278 -368
@@ -26,6 +34,21 @@
 174 l-37 101 -7 655 c-9 880 -25 1040 -106 1040 -18 0 -39 -14 -68 -43z m1345
 -2982 c0 -69 18 -137 50 -185 16 -24 28 -45 27 -47 -5 -4 -184 55 -215 71 -16
 8 -60 40 -98 71 -37 31 -75 60 -84 65 -8 5 -12 11 -9 15 10 10 240 53 287 54
-l42 1 0 -45z"/>
-  </g>
-</svg>
+l42 1 0 -45z`;
+
+export function KelpieMark({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 1024 1024"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label="kelpie"
+    >
+      <rect width="1024" height="1024" rx="180" fill="#17171c" />
+      <g transform="translate(0,1024) scale(0.1,-0.1)" fill="#f2f2f0" stroke="none">
+        <path d={DOG} />
+      </g>
+    </svg>
+  );
+}
