@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.27](https://github.com/yumazak/kelpie/compare/v0.1.26...v0.1.27) - 2026-09-26
+
+### Fixed
+
+- *(web)* keep the reasoning disclosure closed while streaming
+- *(web)* keep the reader's place when older messages load
+
 ## [0.1.26](https://github.com/yumazak/kelpie/compare/v0.1.25...v0.1.26) - 2026-09-26
 
 ### Added
