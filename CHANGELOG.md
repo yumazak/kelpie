@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.22](https://github.com/yumazak/kelpie/compare/v0.1.21...v0.1.22) - 2026-09-26
+
+### Added
+
+- セッション一覧と通知をリポジトリ単位にまとめる
+
 ### Added
 
 - セッション一覧をリポジトリ別にまとめ、その下に worktree ごとのディレクトリを表示する
