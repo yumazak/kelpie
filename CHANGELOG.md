@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.29](https://github.com/yumazak/kelpie/compare/v0.1.28...v0.1.29) - 2026-09-27
+
+### Fixed
+
+- *(web)* fade only when opening a session, not on the way back
+
 ## [0.1.28](https://github.com/yumazak/kelpie/compare/v0.1.27...v0.1.28) - 2026-09-26
 
 ### Added
