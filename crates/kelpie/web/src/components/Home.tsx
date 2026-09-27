@@ -34,6 +34,7 @@ import { isUnread } from "../lib/read";
 import type { OcProject, OcSession } from "../types";
 import { ErrorState } from "./ErrorState";
 import { Dots } from "./loading-ui/dots";
+import { Ring } from "./loading-ui/ring";
 import { Skeleton } from "./ui/skeleton";
 
 /** The display data a row needs, carried on each thread's `custom`. */
@@ -107,7 +108,6 @@ function relative(ms?: number): string {
 function dotClass(row: Partial<Row>): string {
   // A session waiting on the user outranks everything else: it needs an answer.
   if (row.pending) return "bg-orange-400";
-  if (row.active) return "animate-pulse bg-sky-400";
   if (row.outcome === "failed") return "bg-red-500";
   if (row.outcome === "interrupted") return "bg-amber-400";
   // The green dot marks an unread completed turn; once read it is gone.
@@ -120,6 +120,7 @@ function dotClass(row: Partial<Row>): string {
 function dotLabel(row: Partial<Row>): string | undefined {
   if (row.pending === "permission") return "許可待ち";
   if (row.pending === "form") return "回答待ち";
+  if (row.active) return "実行中";
   return undefined;
 }
 
@@ -414,9 +415,18 @@ function KelpieThreadListItem() {
     >
       <ThreadListItemPrimitive.Trigger className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-left">
         <span
-          className={cn("size-2 shrink-0 rounded-full", dotClass(row))}
           title={dotLabel(row)}
-        />
+          className="flex size-3 shrink-0 items-center justify-center"
+        >
+          {row.active ? (
+            // A spinner reads as "working" at a glance; a dot only differs from
+            // "done" by colour, which is easy to miss. The fixed slot keeps the
+            // row's text aligned whether the mark is a dot or a spinner.
+            <Ring aria-label={dotLabel(row)} className="size-3 text-sky-400" />
+          ) : (
+            <span className={cn("size-2 rounded-full", dotClass(row))} />
+          )}
+        </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm">
             <ThreadListItemPrimitive.Title fallback={item.id} />
