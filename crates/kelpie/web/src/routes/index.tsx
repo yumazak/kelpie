@@ -19,11 +19,14 @@ function ListScreen() {
       hasMore={hasMore}
       onLoadMore={loadMore}
       onRefresh={refresh}
-      onOpenSettings={() => void navigate({ to: "/settings" })}
+      onOpenSettings={() =>
+        void navigate({ to: "/settings", viewTransition: true })
+      }
       onSelect={(session) =>
         void navigate({
           to: "/sessions/$sessionId",
           params: { sessionId: session.id },
+          viewTransition: true,
         })
       }
     />

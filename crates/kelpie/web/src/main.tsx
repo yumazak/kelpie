@@ -11,12 +11,12 @@ import "./index.css";
 import { registerServiceWorker } from "./lib/push";
 
 // Every route is a chunk of its own, and the session screen's is 418 kB, so a
-// tap can sit on the network with nothing on screen. Two answers, both of which
-// leave the instant case instant: a fade over the swap, and — only once the
-// wait is real — the same ring the session screen shows while its data lands.
+// tap can sit on the network with nothing on screen. The pending ring covers
+// the real waits. The fade is opted into per navigation (opening a session),
+// not set as a default: a default would also cross-fade on the way back, which
+// snapshots the session and reads as it flashing after the swipe.
 const router = createRouter({
   routeTree,
-  defaultViewTransition: true,
   defaultPendingMs: 150,
   defaultPendingComponent: Pending,
 });
