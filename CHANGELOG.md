@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.30](https://github.com/yumazak/kelpie/compare/v0.1.29...v0.1.30) - 2026-09-27
+
+### Added
+
+- *(web)* spin the loading-ui ring for a running session in the list
+
 ## [0.1.29](https://github.com/yumazak/kelpie/compare/v0.1.28...v0.1.29) - 2026-09-27
 
 ### Fixed
