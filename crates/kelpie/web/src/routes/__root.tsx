@@ -5,32 +5,64 @@ import { useSessions } from "../hooks/useSessions";
 import { consumePendingSession } from "../lib/push";
 import { SessionsProvider } from "../lib/sessions-context";
 
+/** The id of the session the URL names, if the URL names one. */
+function sessionIdFromUrl(): string | undefined {
+  const match = window.location.pathname.match(/^\/sessions\/([^/]+)/);
+  return match ? decodeURIComponent(match[1]) : undefined;
+}
+
 /** The app shell: one session list, and whichever screen the URL names. */
 export const Route = createRootRoute({ component: Root });
 
 function Root() {
   const sessions = useSessions();
   const navigate = useNavigate();
-  const rewroteDeepLink = useRef(false);
+  const followedDeepLink = useRef(false);
 
-  // A notification tap opens `/sessions/<id>`, but iOS may launch the installed
-  // PWA at its start URL and drop the path; the service worker stashes the id
-  // in Cache Storage. Follow it at startup and whenever the app returns to the
-  // foreground — the tap that woke it may have happened while it was suspended.
+  // Cold start. A notification tap arrives one of two ways: the launched PWA
+  // lands on `/sessions/<id>`, or (on iOS) it starts at the start URL and the
+  // service worker leaves the id in Cache Storage. Follow exactly one, once —
+  // navigating for both would stack duplicate entries, and the back gesture
+  // would land on one of them (or outside the app).
   useEffect(() => {
-    const follow = () => {
-      void consumePendingSession().then((id) => {
-        if (id) {
-          void navigate({
-            to: "/sessions/$sessionId",
-            params: { sessionId: id },
-          });
-        }
-      });
-    };
-    follow();
+    if (followedDeepLink.current) return;
+    followedDeepLink.current = true;
+    const fromUrl = sessionIdFromUrl();
+    if (fromUrl) {
+      // Replace the launched entry with the list, then push the session on top,
+      // so back returns to the list. The two must be sequential: issued in the
+      // same tick the router collapses them and the list entry never lands.
+      void navigate({ to: "/", replace: true }).then(() =>
+        navigate({
+          to: "/sessions/$sessionId",
+          params: { sessionId: fromUrl },
+        }),
+      );
+      return;
+    }
+    void consumePendingSession().then((id) => {
+      if (id) {
+        void navigate({
+          to: "/sessions/$sessionId",
+          params: { sessionId: id },
+        });
+      }
+    });
+  }, [navigate]);
+
+  // Foreground: a notification tapped while the app was suspended. Only move
+  // when it names a session other than the one already on screen; the session
+  // screen refreshes itself, so an identical id needs no navigation.
+  useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === "visible") follow();
+      if (document.visibilityState !== "visible") return;
+      void consumePendingSession().then((id) => {
+        if (!id || id === sessionIdFromUrl()) return;
+        void navigate({
+          to: "/sessions/$sessionId",
+          params: { sessionId: id },
+        });
+      });
     };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
@@ -38,20 +70,6 @@ function Root() {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
     };
-  }, [navigate]);
-
-  // A cold deep link should leave the list behind it, so the back gesture
-  // returns there instead of leaving the app.
-  useEffect(() => {
-    if (rewroteDeepLink.current) return;
-    rewroteDeepLink.current = true;
-    const match = window.location.pathname.match(/^\/sessions\/([^/]+)/);
-    if (!match) return;
-    void navigate({ to: "/", replace: true });
-    void navigate({
-      to: "/sessions/$sessionId",
-      params: { sessionId: decodeURIComponent(match[1]) },
-    });
   }, [navigate]);
 
   return (
