@@ -9,7 +9,7 @@ import {
   type CompleteAttachment,
   type ThreadMessageLike,
 } from "@assistant-ui/react";
-import { useCallback, useEffect, useMemo, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 
 import type { PromptFile } from "../api";
 
@@ -65,7 +65,11 @@ export function RuntimeProvider({
   messages: ThreadMessageLike[];
   isRunning: boolean;
   isLoading?: boolean;
-  onNew: (text: string, files: PromptFile[]) => Promise<void>;
+  onNew: (
+    text: string,
+    files: PromptFile[],
+    delivery?: "queue" | "steer",
+  ) => Promise<void>;
   onCancel: () => Promise<void>;
   onPermissionReply: (
     id: string,
@@ -73,6 +77,13 @@ export function RuntimeProvider({
   ) => Promise<void>;
   children: ReactNode;
 }) {
+  // Read through a ref so the composer's submit callback stays stable across
+  // the running/idle edge while still knowing which state it fired in.
+  const runningRef = useRef(isRunning);
+  useEffect(() => {
+    runningRef.current = isRunning;
+  }, [isRunning]);
+
   // Both the plain send and the queued send funnel through here.
   const sendAppend = useCallback(
     async (message: AppendMessage) => {
@@ -82,33 +93,31 @@ export function RuntimeProvider({
         .join("\n");
       const files = filesFromAttachments(message.attachments);
       if (!text.trim() && files.length === 0) return;
-      await onNew(text, files);
+      // A prompt composed while a turn is in flight joins opencode's own inbox
+      // and runs when the turn ends; it never interrupts. The inbox list is
+      // what the thread shows as "送信待ち", so both clients see one queue.
+      await onNew(text, files, runningRef.current ? "queue" : undefined);
     },
     [onNew],
   );
 
-  // A message composed while a turn is still running goes straight to the
-  // session — opencode queues / steers it — instead of the composer blocking.
-  // `createMessageQueue` is assistant-ui's opt-in for keeping it usable.
+  // assistant-ui only keeps the composer usable during a run when a queue
+  // adapter is present — without one the send button is replaced by cancel.
+  // This queue is a pass-through: `run` fires as soon as the prompt is
+  // submitted and hands it to the session, so nothing is ever held locally.
   const queue = useMemo(
     () =>
       createMessageQueue({
         run: (message) => {
           void sendAppend(message);
-        },
-        cancel: () => {
-          void onCancel();
+          // `advance()` marks the queue running before calling `run`. The
+          // prompt is already on its way, so clear that here: otherwise the
+          // next compose would be held behind this one.
+          queue.notifyIdle();
         },
       }),
-    [sendAppend, onCancel],
+    [sendAppend],
   );
-
-  // Drive the queue's busy/idle edges: while a turn runs, a composed message is
-  // held and shown as pending; it dispatches when the turn ends.
-  useEffect(() => {
-    if (isRunning) queue.notifyBusy();
-    else queue.notifyIdle();
-  }, [isRunning, queue]);
 
   const runtime = useExternalStoreRuntime<ThreadMessageLike>({
     // While a turn is in flight, assistant-ui swaps the composer's send button
@@ -138,8 +147,9 @@ export function RuntimeProvider({
         new SimpleTextAttachmentAdapter(),
       ]),
     },
-    // Keep the composer usable during a run: a submitted message goes to the
-    // session through the queue instead of being blocked.
+    // Keep the composer usable during a run. The adapter is a pass-through (see
+    // above): it only advertises the `queue` capability so the send button stays
+    // available while a turn is in flight.
     queue: queue.adapter,
     onNew: sendAppend,
   });

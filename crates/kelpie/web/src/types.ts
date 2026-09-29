@@ -154,6 +154,24 @@ export interface OcMessagesResponse {
   cursor?: OcCursor | null;
 }
 
+/** `Session.Inbox.User` — a prompt admitted while a turn was in flight.
+ *  `payload.text` is what the composer showed; the item waits in the inbox
+ *  until the running turn finishes (or is dropped). */
+export interface OcInboxItem {
+  id: string;
+  sessionID?: string;
+  /** `user`, `synthetic`, `compaction`, or `move`. Only `user` is shown. */
+  type: string;
+  time?: OcTime;
+  /** How the service will treat it: wait (`queue`) or interrupt (`steer`). */
+  delivery?: "steer" | "queue";
+  payload?: {
+    text?: string;
+    files?: OcFileAttachment[];
+    skills?: OcSkillAttachment[];
+  };
+}
+
 /** `Permission.Source` — the tool call a permission request gates. */
 export interface OcPermissionSource {
   type: "tool";

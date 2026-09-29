@@ -22,6 +22,7 @@ export function useLiveMessage(
   sessionId: string,
   onStepEnd: () => Promise<void>,
   onDockEvent: () => void,
+  onInboxEvent: () => void,
 ): { live: ThreadMessageLike | null; running: boolean } {
   const [live, setLive] = useState<ThreadMessageLike | null>(null);
   const [running, setRunning] = useState(false);
@@ -37,6 +38,7 @@ export function useLiveMessage(
     const resync = () => {
       void onStepEnd();
       onDockEvent();
+      onInboxEvent();
     };
     source.addEventListener("open", resync);
 
@@ -119,6 +121,14 @@ export function useLiveMessage(
           });
           break;
         default:
+          // The inbox changed (a prompt was admitted, delivered, or dropped),
+          // so the "waiting" list re-reads it. A delivery also puts the prompt
+          // into the message list, so refresh that too.
+          if (type.startsWith("session.inbox.")) {
+            onInboxEvent();
+            if (type === "session.inbox.delivered") void onStepEnd();
+            return;
+          }
           // A permission or form is pending; the dock re-fetches its lists.
           if (type.startsWith("permission.") || type.startsWith("form.")) {
             onDockEvent();
@@ -129,7 +139,7 @@ export function useLiveMessage(
 
     source.addEventListener("oc", onEvent as EventListener);
     return () => source.close();
-  }, [sessionId, onStepEnd, onDockEvent]);
+  }, [sessionId, onStepEnd, onDockEvent, onInboxEvent]);
 
   return { live, running };
 }

@@ -31,6 +31,7 @@ already there:
 | Conversation (structured) | `GET /api/session/{id}/message` |
 | Streaming | `GET /api/event` (`session.text.delta` and friends) |
 | Sending | `POST /api/session/{id}/prompt` |
+| While a turn runs | `POST .../prompt` with `delivery: queue` / `GET /api/session/{id}/inbox` / `DELETE .../inbox/{id}` |
 | Repository (worktrees) / main checkout | `GET /api/project` / `GET /api/worktree` |
 | Permissions | `GET /api/session/{id}/permission` / `POST .../reply` |
 | Questions (forms) | `GET /api/session/{id}/form` / `POST .../reply` |
@@ -84,6 +85,7 @@ The events that matter:
 | `session.reasoning.*` | streaming the model's reasoning |
 | `session.tool.*` | tool calls |
 | `session.execution.succeeded` / `.failed` | turn finished (notify) |
+| `session.inbox.*` | a prompt was admitted, delivered or dropped (refresh the queue) |
 | `permission.asked` | permission prompt (notify + dock) |
 | `form.created` | question (notify + dock) |
 
@@ -106,7 +108,12 @@ The events that matter:
   they are (`user` → bubble, assistant `text` → markdown, `reasoning` → collapsible,
   `tool` → card).
 - **Streaming**: accumulate `session.text.delta` and render the reply as it arrives.
-  Re-fetch the authoritative list on `step.ended`. A 2-second poll is the fallback.
+  Re-fetch the authoritative list on `step.ended`.
+- **Sending while a turn runs**: the prompt goes to opencode with `delivery: queue` and
+  lands in the session's **inbox**; the phone renders that inbox as “送信待ち” above the
+  composer (with a cancel button → `DELETE .../inbox/{id}`). Nothing is queued in the
+  browser, so the phone and the TUI show the same queue, and the running turn is never
+  interrupted. `session.inbox.*` refreshes the list.
 - **HarnessDock**: pinned above the composer.
   - permission → “Allow / Always allow / Deny”
   - form → renders the fields (string / number / boolean / multiselect)

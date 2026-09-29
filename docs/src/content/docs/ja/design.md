@@ -30,6 +30,7 @@ opencode v2 は **サーバ + クライアント**の構造で、TUI も web も
 | 会話（構造化） | `GET /api/session/{id}/message` |
 | ストリーミング | `GET /api/event`（`session.text.delta` 等） |
 | 送信 | `POST /api/session/{id}/prompt` |
+| 実行中の追加送信 | `POST .../prompt`（`delivery: queue`）/ `GET /api/session/{id}/inbox` / `DELETE .../inbox/{id}` |
 | リポジトリ（worktree 統合）/ 本体チェックアウト | `GET /api/project` / `GET /api/worktree` |
 | 権限 | `GET /api/session/{id}/permission` / `POST .../reply` |
 | 質問（form） | `GET /api/session/{id}/form` / `POST .../reply` |
@@ -80,6 +81,7 @@ TUI 専用のハーネス（claude / codex / pi）は、画面を読んでキー
 | `session.reasoning.*` | 思考のストリーミング |
 | `session.tool.*` | ツール呼び出し |
 | `session.execution.succeeded` / `.failed` | ターン完了（通知） |
+| `session.inbox.*` | 送信が受付・配信・取消された（キューの再取得） |
 | `permission.asked` | 権限待ち（通知 + dock） |
 | `form.created` | 質問（通知 + dock） |
 
@@ -100,7 +102,11 @@ TUI 専用のハーネス（claude / codex / pi）は、画面を読んでキー
 - **Chat**: assistant-ui の styled `Thread`。会話は opencode のメッセージをそのまま描画
   （`user` → バブル、`assistant` の `text` → markdown、`reasoning` → 折りたたみ、`tool` → カード）。
 - **ストリーミング**: `session.text.delta` を積んで進行中の発言を描画。`step.ended` で
-  権威ある一覧を再取得。2秒ポーリングはフォールバック。
+  権威ある一覧を再取得。
+- **実行中の追加送信**: 送信は `delivery: queue` で opencode に渡し、セッションの
+  **inbox** に入る。スマホはその inbox を composer の上に「送信待ち」として描画する
+  （取り消しは `DELETE .../inbox/{id}`）。ブラウザ側にキューを持たないので、スマホと
+  TUI が同じキューを見え、実行中のターンを中断しない。`session.inbox.*` で再取得。
 - **HarnessDock**: composer の上に固定。
   - permission → 「許可 / 常に許可 / 拒否」
   - form → フィールド（string / number / boolean / multiselect）を描画

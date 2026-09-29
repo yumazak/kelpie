@@ -18,6 +18,7 @@ import {
   type ThreadGroupPart,
 } from "@/components/assistant-ui/elements/thread.aui";
 import {
+  cancelInboxItem,
   interruptSession,
   replyForm,
   replyPermission,
@@ -35,6 +36,8 @@ import { isUnread } from "../lib/read";
 import {
   formsKey,
   formsQuery,
+  inboxKey,
+  inboxQuery,
   loadOlderMessages,
   messagesKey,
   messagesQuery,
@@ -99,6 +102,7 @@ export function Chat({
   const messagesResult = useQuery(messagesQuery(session.id));
   const permissionsResult = useQuery(permissionsQuery(session.id));
   const formsResult = useQuery(formsQuery(session.id));
+  const inboxResult = useQuery(inboxQuery(session.id));
 
   const permissions = permissionsResult.data ?? [];
   const forms = formsResult.data ?? [];
@@ -164,6 +168,10 @@ export function Chat({
       ]).then(() => undefined),
     [queryClient, session.id],
   );
+  const invalidateInbox = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: inboxKey(session.id) }),
+    [queryClient, session.id],
+  );
 
   // Returning to the foreground — e.g. a notification tap while this session
   // was already on screen, so `Chat` never remounted — must show the latest
@@ -173,6 +181,7 @@ export function Chat({
       if (document.visibilityState !== "visible") return;
       void invalidateMessages();
       void invalidateDock();
+      void invalidateInbox();
     };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
@@ -180,12 +189,13 @@ export function Chat({
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
     };
-  }, [invalidateMessages, invalidateDock]);
+  }, [invalidateMessages, invalidateDock, invalidateInbox]);
 
   const { live, running } = useLiveMessage(
     session.id,
     invalidateMessages,
     invalidateDock,
+    invalidateInbox,
   );
 
   // A skill is attached to the next message. The picker button and the chips
@@ -203,27 +213,34 @@ export function Chat({
   );
 
   const handleNew = useCallback(
-    async (text: string, files: PromptFile[]) => {
-      // Show the message at once, before the round trip lands. The skill and
-      // attachment notes match how the server's copy renders them.
-      const notes = [
-        ...attachedSkills.map((skill) => `🧩 ${skill.name}`),
-        ...files.map((file) => `📎 ${file.name ?? "添付"}`),
-      ];
-      const body = [text, notes.join("\n")].filter(Boolean).join("\n");
-      const local: ThreadMessageLike = {
-        id: `local-${Date.now()}`,
-        role: "user",
-        content: [{ type: "text", text: body || "（添付）" }],
-      };
-      setOptimistic(local);
-      optimisticAt.current = messagesRef.current.length;
+    async (text: string, files: PromptFile[], delivery?: "queue" | "steer") => {
+      // A prompt sent while a turn is running goes into opencode's inbox. The
+      // inbox list (the "送信待ち" row) is where it shows, so no stand-in is
+      // needed here — it would only duplicate that row.
+      const queued = delivery === "queue";
+      if (!queued) {
+        // Show the message at once, before the round trip lands. The skill and
+        // attachment notes match how the server's copy renders them.
+        const notes = [
+          ...attachedSkills.map((skill) => `🧩 ${skill.name}`),
+          ...files.map((file) => `📎 ${file.name ?? "添付"}`),
+        ];
+        const body = [text, notes.join("\n")].filter(Boolean).join("\n");
+        const local: ThreadMessageLike = {
+          id: `local-${Date.now()}`,
+          role: "user",
+          content: [{ type: "text", text: body || "（添付）" }],
+        };
+        setOptimistic(local);
+        optimisticAt.current = messagesRef.current.length;
+      }
       try {
         await sendPrompt(
           session.id,
           text,
           files,
           attachedSkills.map((skill) => ({ id: skill.id })),
+          delivery,
         );
       } catch (sendError) {
         setOptimistic(null);
@@ -231,9 +248,22 @@ export function Chat({
         throw sendError;
       }
       setAttachedSkills([]);
-      void invalidateMessages();
+      if (queued) void invalidateInbox();
+      else void invalidateMessages();
     },
-    [session.id, attachedSkills, invalidateMessages],
+    [session.id, attachedSkills, invalidateMessages, invalidateInbox],
+  );
+
+  // Drop a queued prompt from the session's inbox.
+  const handleRemoveQueued = useCallback(
+    (inboxId: string) => {
+      void cancelInboxItem(session.id, inboxId)
+        .catch(() => {
+          /* already delivered or dropped — the refetch will settle it */
+        })
+        .finally(() => void invalidateInbox());
+    },
+    [session.id, invalidateInbox],
   );
 
   const handleStop = useCallback(async () => {
@@ -310,6 +340,30 @@ export function Chat({
       />
     ) : undefined;
 
+  // opencode's inbox, as the "送信待ち" rows above the composer. The skill and
+  // attachment notes are added the same way the thread renders a sent message.
+  const queued = useMemo(
+    () =>
+      (inboxResult.data ?? [])
+        .filter((item) => item.type === "user")
+        .map((item) => {
+          const notes = [
+            ...(item.payload?.skills ?? []).map(
+              (skill) => `🧩 ${skill.name ?? skill.id}`,
+            ),
+            ...(item.payload?.files ?? []).map(
+              (file) => `📎 ${file.name ?? "添付"}`,
+            ),
+          ];
+          return {
+            id: item.id,
+            text: [item.payload?.text, ...notes].filter(Boolean).join("\n"),
+          };
+        })
+        .filter((item) => item.text !== ""),
+    [inboxResult.data],
+  );
+
   return (
     <div className="flex h-full flex-col bg-background">
       <header className="flex items-center gap-3 border-b border-border px-4 py-3">
@@ -356,6 +410,8 @@ export function Chat({
                     ToolByName: KELPIE_TOOLS,
                   }}
                   dock={dock}
+                  queued={queued}
+                  onRemoveQueued={handleRemoveQueued}
                   onLoadOlder={handleLoadOlder}
                   autoFocus={false}
                 />

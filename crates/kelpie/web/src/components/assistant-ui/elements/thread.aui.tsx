@@ -57,6 +57,7 @@ import {
   SquareIcon,
   ThumbsDownIcon,
   ThumbsUpIcon,
+  XIcon,
 } from "lucide-react";
 import {
   createContext,
@@ -142,6 +143,12 @@ const taskAwareGroupByWithQuestionStandalone: typeof taskAwareGroupBy = (
   context,
 ) => (isQuestion(part) ? [] : taskAwareGroupBy(part, context));
 
+/** One prompt opencode is holding for a running turn. */
+export type ThreadQueuedPrompt = {
+  id: string;
+  text: string;
+};
+
 export type ThreadProps = {
   components?: ThreadComponents | undefined;
   autoFocus?: boolean | undefined;
@@ -150,6 +157,13 @@ export type ThreadProps = {
    * InteractionDock here so a blocked agent's question sits over the input.
    */
   dock?: ReactNode;
+  /**
+   * Prompts composed while a turn was running, as opencode's inbox holds them.
+   * Shown above the composer as "送信待ち".
+   */
+  queued?: ThreadQueuedPrompt[] | undefined;
+  /** Drop one queued prompt from the session's inbox. */
+  onRemoveQueued?: ((id: string) => void) | undefined;
   /**
    * Called when the reader scrolls to the top, to pull an older page of the
    * conversation. Resolves `true` while more history remains.
@@ -200,6 +214,8 @@ export const Thread: FC<ThreadProps> = ({
   components = EMPTY_COMPONENTS,
   autoFocus = true,
   dock,
+  queued,
+  onRemoveQueued,
   onLoadOlder,
 }) => {
   const isEmpty = useAuiState(isNewChatView);
@@ -210,6 +226,8 @@ export const Thread: FC<ThreadProps> = ({
         isEmpty={isEmpty}
         autoFocus={autoFocus}
         dock={dock}
+        queued={queued}
+        onRemoveQueued={onRemoveQueued}
         onLoadOlder={onLoadOlder}
       />
     </ThreadComponentsContext.Provider>
@@ -220,8 +238,10 @@ const ThreadRoot: FC<{
   isEmpty: boolean;
   autoFocus: boolean;
   dock?: ReactNode;
+  queued?: ThreadQueuedPrompt[];
+  onRemoveQueued?: (id: string) => void;
   onLoadOlder?: () => Promise<boolean>;
-}> = ({ isEmpty, autoFocus, dock, onLoadOlder }) => {
+}> = ({ isEmpty, autoFocus, dock, queued, onRemoveQueued, onLoadOlder }) => {
   const { Welcome = ThreadWelcome } = useContext(ThreadComponentsContext);
   const loadingOlder = useRef(false);
   const noMoreOlder = useRef(false);
@@ -315,7 +335,7 @@ const ThreadRoot: FC<{
             <ThreadScrollToBottom />
             <ThreadFollowupSuggestions />
             {dock}
-            <QueuedMessages />
+            <QueuedMessages queued={queued} onRemove={onRemoveQueued} />
             <Composer autoFocus={autoFocus} />
             <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
               <ThreadSuggestions />
@@ -478,21 +498,37 @@ const ThreadSuggestionItem: FC = () => {
   );
 };
 
-/** Messages composed while a turn was running, waiting their turn. */
-const QueuedMessages: FC = () => {
-  const queue = useAuiState((s) => s.composer.queue);
-  if (queue.length === 0) return null;
+/** Prompts composed while a turn was running, as opencode's inbox holds them. */
+const QueuedMessages: FC<{
+  queued?: ThreadQueuedPrompt[];
+  onRemove?: (id: string) => void;
+}> = ({ queued, onRemove }) => {
+  if (!queued || queued.length === 0) return null;
   return (
     <div data-slot="aui_composer-queue" className="flex flex-col gap-1">
       <div className="px-2 text-xs text-muted-foreground">送信待ち</div>
-      {queue.map((item) => (
+      {queued.map((item) => (
         <div
           key={item.id}
-          className="rounded-(--composer-radius) border border-border bg-muted/40 px-3 py-2 text-sm wrap-break-word"
+          className="flex items-start gap-2 rounded-(--composer-radius) border border-border bg-muted/40 px-3 py-2 text-sm wrap-break-word"
         >
-          {item.parts
-            .flatMap((part) => (part.type === "text" ? [part.text] : []))
-            .join("\n")}
+          <span className="min-w-0 flex-1 whitespace-pre-wrap">
+            {item.text}
+          </span>
+          {onRemove && (
+            <TooltipIconButton
+              tooltip="送信待ちを取り消す"
+              side="bottom"
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground -my-1 -mr-1 size-6 shrink-0 rounded-full"
+              aria-label="送信待ちを取り消す"
+              onClick={() => onRemove(item.id)}
+            >
+              <XIcon className="size-3.5" />
+            </TooltipIconButton>
+          )}
         </div>
       ))}
     </div>

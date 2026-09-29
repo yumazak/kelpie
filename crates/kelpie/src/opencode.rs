@@ -279,12 +279,18 @@ impl OpencodeClient {
     /// `{ uri, name?, description? }`, where `uri` is a `file://` URL or a
     /// `data:` URL. `skills` are `Prompt.SkillAttachment`s (`{ id }`); the
     /// service inlines each skill's body into the turn.
+    ///
+    /// `delivery` is opencode's `Session.Inbox.Delivery`, which decides what a
+    /// prompt sent while a turn is in flight does: `"queue"` waits for the turn
+    /// to finish, `"steer"` interrupts it. `None` lets the service decide, which
+    /// is what an idle session wants.
     pub async fn prompt(
         &self,
         session_id: &str,
         text: &str,
         files: &[Value],
         skills: &[Value],
+        delivery: Option<&str>,
     ) -> Result<Value, OpencodeError> {
         let mut body = serde_json::json!({ "text": text });
         if !files.is_empty() {
@@ -293,10 +299,39 @@ impl OpencodeClient {
         if !skills.is_empty() {
             body["skills"] = Value::Array(skills.to_vec());
         }
+        if let Some(delivery) = delivery {
+            body["delivery"] = Value::String(delivery.to_string());
+        }
         self.json(
             reqwest::Method::POST,
             &format!("/api/session/{session_id}/prompt"),
             Some(body),
+        )
+        .await
+    }
+
+    /// A session's inbox: prompts admitted while a turn was in flight, waiting
+    /// for their turn. The service owns this queue — every client shares it —
+    /// so the phone renders it instead of holding prompts of its own.
+    pub async fn inbox(&self, session_id: &str) -> Result<Value, OpencodeError> {
+        self.json(
+            reqwest::Method::GET,
+            &format!("/api/session/{session_id}/inbox"),
+            None,
+        )
+        .await
+    }
+
+    /// Drop one pending prompt from a session's inbox.
+    pub async fn cancel_inbox(
+        &self,
+        session_id: &str,
+        inbox_id: &str,
+    ) -> Result<Value, OpencodeError> {
+        self.json(
+            reqwest::Method::DELETE,
+            &format!("/api/session/{session_id}/inbox/{inbox_id}"),
+            None,
         )
         .await
     }

@@ -8,6 +8,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import {
   fetchForms,
+  fetchInbox,
   fetchMessages,
   fetchPermissions,
   fetchProjects,
@@ -22,6 +23,7 @@ export const sessionsKey = ["sessions"] as const;
 export const projectsKey = ["projects"] as const;
 export const sessionKey = (id: string) => ["session", id] as const;
 export const messagesKey = (id: string) => ["messages", id] as const;
+export const inboxKey = (id: string) => ["inbox", id] as const;
 export const permissionsKey = (id: string) => ["permissions", id] as const;
 export const formsKey = (id: string) => ["forms", id] as const;
 export const skillsKey = (directory: string) => ["skills", directory] as const;
@@ -110,6 +112,14 @@ export const permissionsQuery = (id: string) =>
   queryOptions({
     queryKey: permissionsKey(id),
     queryFn: () => fetchPermissions(id),
+  });
+
+/** The prompts opencode is holding for a running turn. The service owns this
+ *  queue, so it is refetched rather than kept locally. */
+export const inboxQuery = (id: string) =>
+  queryOptions({
+    queryKey: inboxKey(id),
+    queryFn: () => fetchInbox(id),
   });
 
 export const formsQuery = (id: string) =>

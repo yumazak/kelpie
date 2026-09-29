@@ -1,5 +1,6 @@
 import type {
   OcForm,
+  OcInboxItem,
   OcMessagesResponse,
   OcPermission,
   OcProject,
@@ -84,16 +85,20 @@ export async function fetchSkills(directory?: string): Promise<OcSkill[]> {
   return body.data ?? [];
 }
 
-/** Send a prompt to a session, with optional attachments and attached skills. */
+/** Send a prompt to a session, with optional attachments and attached skills.
+ *  `delivery` is opencode's `Session.Inbox.Delivery`: `queue` admits the prompt
+ *  but waits for the running turn, `steer` interrupts it. Omit it when idle. */
 export async function sendPrompt(
   sessionId: string,
   text: string,
   files: PromptFile[] = [],
   skills: PromptSkill[] = [],
+  delivery?: "queue" | "steer",
 ): Promise<void> {
   const payload: Record<string, unknown> = { text };
   if (files.length > 0) payload.files = files;
   if (skills.length > 0) payload.skills = skills;
+  if (delivery) payload.delivery = delivery;
   const response = await fetch(
     `/api/sessions/${encodeURIComponent(sessionId)}/prompt`,
     {
@@ -104,6 +109,25 @@ export async function sendPrompt(
   );
   if (response.ok) return;
   throw await failure(response);
+}
+
+/** The session's inbox: prompts admitted while a turn was running, waiting for
+ *  it to finish. opencode owns the queue, so every client shows the same one. */
+export async function fetchInbox(sessionId: string): Promise<OcInboxItem[]> {
+  const body = await getJson<{ data: OcInboxItem[] }>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/inbox`,
+  );
+  return body.data ?? [];
+}
+
+/** Drop one pending prompt from the session's inbox. */
+export function cancelInboxItem(
+  sessionId: string,
+  inboxId: string,
+): Promise<void> {
+  return deleteJson(
+    `/api/sessions/${encodeURIComponent(sessionId)}/inbox/${encodeURIComponent(inboxId)}`,
+  );
 }
 
 /** Interrupt the running turn. */
@@ -157,6 +181,12 @@ async function postJson(path: string, body: unknown): Promise<void> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
+  if (response.ok) return;
+  throw await failure(response);
+}
+
+async function deleteJson(path: string): Promise<void> {
+  const response = await fetch(path, { method: "DELETE" });
   if (response.ok) return;
   throw await failure(response);
 }

@@ -15,7 +15,7 @@ use axum::http::{HeaderValue, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -105,6 +105,11 @@ pub fn router(state: AppState, static_dir: Option<PathBuf>) -> Router {
             get(oc_session).delete(oc_delete_session),
         )
         .route("/api/sessions/{id}/prompt", post(oc_prompt))
+        .route("/api/sessions/{id}/inbox", get(oc_inbox))
+        .route(
+            "/api/sessions/{id}/inbox/{inbox_id}",
+            delete(oc_cancel_inbox),
+        )
         .route("/api/sessions/{id}/interrupt", post(oc_interrupt))
         .route("/api/sessions/{id}/view", post(oc_view))
         .route("/api/sessions/{id}/permissions", get(oc_permissions))
@@ -553,6 +558,10 @@ struct PromptBody {
     /// opencode `Prompt.SkillAttachment`s (`{ id }`).
     #[serde(default)]
     skills: Vec<serde_json::Value>,
+    /// `Session.Inbox.Delivery`: `queue` waits for the running turn, `steer`
+    /// interrupts it. Absent on an idle session.
+    #[serde(default)]
+    delivery: Option<String>,
 }
 
 async fn oc_prompt(
@@ -563,7 +572,38 @@ async fn oc_prompt(
     let client = state.opencode().await?;
     Ok(Json(
         client
-            .prompt(&id, &body.text, &body.files, &body.skills)
+            .prompt(
+                &id,
+                &body.text,
+                &body.files,
+                &body.skills,
+                body.delivery.as_deref(),
+            )
+            .await
+            .map_err(oc_error)?,
+    ))
+}
+
+/// A session's inbox: prompts admitted while a turn was in flight, waiting for
+/// it to finish. Shared with every other opencode client, so the phone shows
+/// the service's queue rather than one of its own.
+async fn oc_inbox(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let client = state.opencode().await?;
+    Ok(Json(client.inbox(&id).await.map_err(oc_error)?))
+}
+
+/// Drop one pending prompt from a session's inbox.
+async fn oc_cancel_inbox(
+    State(state): State<AppState>,
+    Path((id, inbox_id)): Path<(String, String)>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let client = state.opencode().await?;
+    Ok(Json(
+        client
+            .cancel_inbox(&id, &inbox_id)
             .await
             .map_err(oc_error)?,
     ))
