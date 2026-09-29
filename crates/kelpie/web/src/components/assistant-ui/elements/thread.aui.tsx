@@ -62,6 +62,7 @@ import {
 import {
   createContext,
   useContext,
+  useLayoutEffect,
   useRef,
   useState,
   type ComponentType,
@@ -246,31 +247,55 @@ const ThreadRoot: FC<{
   const loadingOlder = useRef(false);
   const noMoreOlder = useRef(false);
   const [olderPending, setOlderPending] = useState(false);
+  // Where a prepend has to leave the reader. The correction is applied by the
+  // layout effect below, once the older messages are in the DOM: measuring the
+  // height right after the fetch reads it *before* React commits the new rows,
+  // so the growth looks like zero and the reader stays at the very top. On a
+  // browser without scroll anchoring (Safari) that also means every scroll
+  // event pulls another page, walking back through the whole history.
+  const pendingPrepend = useRef<{
+    el: HTMLDivElement;
+    scrollTop: number;
+    scrollHeight: number;
+    count: number;
+  } | null>(null);
+  const messageCount = useAuiState((s) => s.thread.messages.length);
 
-  // Scrolling to the top pulls the previous page. The browser anchors scroll
-  // to the content already on screen, so prepending does not move the reader.
+  useLayoutEffect(() => {
+    const pending = pendingPrepend.current;
+    if (!pending || messageCount <= pending.count) return;
+    pendingPrepend.current = null;
+    // Older messages were prepended above the viewport. Grow scrollTop by the
+    // height they added, so the reader stays on the message they were looking
+    // at; otherwise they stay pinned to the very top. The jump is instant, not
+    // smooth, and happens before paint.
+    const grew = pending.el.scrollHeight - pending.scrollHeight;
+    if (grew <= 0) return;
+    const behavior = pending.el.style.scrollBehavior;
+    pending.el.style.scrollBehavior = "auto";
+    pending.el.scrollTop = pending.scrollTop + grew;
+    pending.el.style.scrollBehavior = behavior;
+  }, [messageCount]);
+
+  // Scrolling to the top pulls the previous page.
   const handleScroll = (event: UIEvent<HTMLDivElement>) => {
     if (!onLoadOlder || loadingOlder.current || noMoreOlder.current) return;
     const el = event.currentTarget;
     if (el.scrollTop > 80) return;
     loadingOlder.current = true;
     setOlderPending(true);
-    const before = el.scrollHeight;
-    const top = el.scrollTop;
+    pendingPrepend.current = {
+      el,
+      scrollTop: el.scrollTop,
+      scrollHeight: el.scrollHeight,
+      count: messageCount,
+    };
     void onLoadOlder()
       .then((more) => {
-        if (!more) noMoreOlder.current = true;
-        // Older messages were prepended above the viewport. Grow scrollTop by
-        // the height they added, so the reader stays on the message they were
-        // looking at; otherwise they stay pinned to the very top and every
-        // scroll event pulls another page. The jump is instant, not smooth.
-        const grew = el.scrollHeight - before;
-        if (grew > 0) {
-          const behavior = el.style.scrollBehavior;
-          el.style.scrollBehavior = "auto";
-          el.scrollTop = top + grew;
-          el.style.scrollBehavior = behavior;
-        }
+        if (more) return;
+        noMoreOlder.current = true;
+        // Nothing was prepended, so there is nothing to anchor.
+        if (pendingPrepend.current?.el === el) pendingPrepend.current = null;
       })
       .finally(() => {
         loadingOlder.current = false;
@@ -293,7 +318,7 @@ const ThreadRoot: FC<{
         turnAnchor="top"
         data-slot="aui_thread-viewport"
         onScroll={handleScroll}
-        className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll overscroll-y-contain scroll-smooth"
+        className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll overscroll-y-contain scroll-smooth [overflow-anchor:none]"
       >
         <div
           className={cn(
