@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.32](https://github.com/yumazak/kelpie/compare/v0.1.31...v0.1.32) - 2026-09-29
+
+### Added
+
+- *(web)* queue prompts in opencode's inbox instead of the browser
+
 ## [0.1.31](https://github.com/yumazak/kelpie/compare/v0.1.30...v0.1.31) - 2026-09-28
 
 ### Fixed
